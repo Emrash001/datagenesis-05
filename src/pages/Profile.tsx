@@ -1,9 +1,10 @@
+
 /**
  * ENTERPRISE USER PROFILE PAGE
  * Complete user management with Google integration
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   User, 
@@ -18,7 +19,9 @@ import {
   Award,
   Activity,
   Trash2,
-  LogOut
+  LogOut,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useAtom } from 'jotai';
@@ -31,15 +34,51 @@ const Profile: React.FC = () => {
   const [currentModel] = useAtom(modelConfigAtom);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [stats, setStats] = useState({
+    dataGenerated: 0,
+    datasetsCreated: 0,
+    qualityScore: 0,
+    privacyScore: 0
+  });
   
   const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
+    name: '',
+    email: '',
     bio: 'AI Engineer passionate about synthetic data generation',
     location: 'San Francisco, CA',
     website: 'https://datagenesis.ai',
     timezone: 'America/Los_Angeles'
   });
+
+  // Update form data when user changes
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: user.name || '',
+        email: user.email || ''
+      }));
+
+      // Simulate loading user stats
+      const loadUserStats = async () => {
+        try {
+          // In a real app, this would be an API call
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          setStats({
+            dataGenerated: Math.floor(Math.random() * 50000) + 10000,
+            datasetsCreated: Math.floor(Math.random() * 50) + 10,
+            qualityScore: Math.floor(Math.random() * 10) + 90,
+            privacyScore: Math.floor(Math.random() * 5) + 95
+          });
+        } catch (error) {
+          console.error('Failed to load user stats:', error);
+        }
+      };
+
+      loadUserStats();
+    }
+  }, [user]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -56,9 +95,13 @@ const Profile: React.FC = () => {
       });
       
       setIsEditing(false);
-      toast.success('Profile updated successfully!');
+      toast.success('Profile updated successfully!', {
+        icon: <CheckCircle className="w-4 h-4" />
+      });
     } catch (error) {
-      toast.error('Failed to update profile');
+      toast.error('Failed to update profile', {
+        icon: <AlertCircle className="w-4 h-4" />
+      });
     } finally {
       setIsSaving(false);
     }
@@ -157,20 +200,26 @@ const Profile: React.FC = () => {
                     <User className="w-8 h-8 text-white" />
                   </div>
                 )}
-                <button className="absolute bottom-0 right-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+                <button className="absolute bottom-0 right-0 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center hover:bg-purple-600 transition-colors">
                   <Camera className="w-3 h-3 text-white" />
                 </button>
               </div>
               
               <div className="flex-1">
-                <h2 className="text-xl font-semibold text-white">{user.name}</h2>
-                <p className="text-gray-400">{user.email}</p>
+                <h2 className="text-xl font-semibold text-white">{user.name || 'Anonymous User'}</h2>
+                <p className="text-gray-400">{user.email || 'No email provided'}</p>
                 {user.verified && (
                   <div className="flex items-center gap-1 mt-1">
                     <Shield className="w-4 h-4 text-green-400" />
                     <span className="text-sm text-green-400">Verified Account</span>
                   </div>
                 )}
+                <div className="flex items-center gap-1 mt-1">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-400">
+                    Member since {new Date().toLocaleDateString()}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -186,9 +235,10 @@ const Profile: React.FC = () => {
                       value={formData.name}
                       onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Enter your full name"
                     />
                   ) : (
-                    <p className="text-white">{formData.name}</p>
+                    <p className="text-white">{formData.name || 'Not provided'}</p>
                   )}
                 </div>
                 
@@ -202,9 +252,10 @@ const Profile: React.FC = () => {
                       value={formData.email}
                       onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Enter your email"
                     />
                   ) : (
-                    <p className="text-white">{formData.email}</p>
+                    <p className="text-white">{formData.email || 'Not provided'}</p>
                   )}
                 </div>
               </div>
@@ -219,6 +270,7 @@ const Profile: React.FC = () => {
                     onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
                     rows={3}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                    placeholder="Tell us about yourself"
                   />
                 ) : (
                   <p className="text-white">{formData.bio}</p>
@@ -236,6 +288,7 @@ const Profile: React.FC = () => {
                       value={formData.location}
                       onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Your location"
                     />
                   ) : (
                     <div className="flex items-center gap-2">
@@ -255,6 +308,7 @@ const Profile: React.FC = () => {
                       value={formData.website}
                       onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
                       className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Your website URL"
                     />
                   ) : (
                     <a 
@@ -349,26 +403,26 @@ const Profile: React.FC = () => {
           animate={{ x: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          {/* Stats */}
+          {/* User Stats */}
           <div className="bg-gray-800/50 backdrop-blur-xl border border-gray-700/50 rounded-xl p-6">
             <h3 className="text-lg font-semibold text-white mb-4">Statistics</h3>
             
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Data Generated</span>
-                <span className="text-white font-semibold">15,247 rows</span>
+                <span className="text-white font-semibold">{stats.dataGenerated.toLocaleString()} rows</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Datasets Created</span>
-                <span className="text-white font-semibold">23</span>
+                <span className="text-white font-semibold">{stats.datasetsCreated}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Quality Score</span>
-                <span className="text-green-400 font-semibold">98.5%</span>
+                <span className="text-green-400 font-semibold">{stats.qualityScore}%</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Privacy Score</span>
-                <span className="text-blue-400 font-semibold">99.2%</span>
+                <span className="text-blue-400 font-semibold">{stats.privacyScore}%</span>
               </div>
             </div>
           </div>
@@ -404,7 +458,7 @@ const Profile: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <span className="text-gray-400">Joined</span>
-                <span className="text-white">December 2024</span>
+                <span className="text-white">{new Date().toLocaleDateString()}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-gray-400" />
