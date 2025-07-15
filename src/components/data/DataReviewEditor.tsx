@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DataGrid, Column } from 'react-data-grid';
+import { DataGrid, Column, RenderCellProps, RenderHeaderCellProps, RenderEditCellProps } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 
 import { 
@@ -151,15 +151,15 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
       width: 60,
       resizable: false,
       sortable: false,
-      formatter: ({ row }) => (
+      renderCell: (props: RenderCellProps<DataRow>) => (
         <input
           type="checkbox"
-          checked={selectedRows.has(row.id)}
-          onChange={(e) => handleRowSelect(row.id, e.target.checked)}
+          checked={selectedRows.has(props.row.id)}
+          onChange={(e) => handleRowSelect(props.row.id, e.target.checked)}
           className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
         />
       ),
-      headerRenderer: () => (
+      renderHeaderCell: (props: RenderHeaderCellProps<DataRow>) => (
         <input
           type="checkbox"
           checked={selectedRows.size === filteredData.length && filteredData.length > 0}
@@ -183,29 +183,29 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         sortable: true,
         editable: true,
         width: getColumnWidth(key, sampleRow[key]),
-        editor: ({ row, onRowChange, column }) => (
+        renderEditCell: (props: RenderEditCellProps<DataRow>) => (
           <input
-            type={getInputType(column.key, row[column.key])}
-            value={row[column.key] || ''}
+            type={getInputType(props.column.key, props.row[props.column.key])}
+            value={props.row[props.column.key] || ''}
             onChange={(e) => {
               let value: any = e.target.value;
               
               // Type conversion based on original value type
-              if (typeof row[column.key] === 'number') {
+              if (typeof props.row[props.column.key] === 'number') {
                 value = parseFloat(value) || 0;
-              } else if (typeof row[column.key] === 'boolean') {
+              } else if (typeof props.row[props.column.key] === 'boolean') {
                 value = value === 'true';
               }
               
-              onRowChange({ ...row, [column.key]: value });
+              props.onRowChange({ ...props.row, [props.column.key]: value });
             }}
             className="w-full h-full px-2 bg-gray-700 text-white border-none outline-none focus:bg-gray-600"
             autoFocus
           />
         ),
-        formatter: ({ row }) => (
+        renderCell: (props: RenderCellProps<DataRow>) => (
           <div className="px-2 py-1 text-sm text-gray-300">
-            {formatCellValue(row[column.key])}
+            {formatCellValue(props.row[props.column.key])}
           </div>
         )
       }));
