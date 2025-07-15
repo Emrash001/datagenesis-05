@@ -83,8 +83,6 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
   const [isDownloading, setIsDownloading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showDataPreview, setShowDataPreview] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 10;
 
   // Initialize editing data when data changes
   useEffect(() => {
@@ -277,8 +275,6 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
 
   const columns = Object.keys(editingData[0] || {}).filter(key => !key.startsWith('_'));
   const overallGrade = calculateOverallGrade();
-  const totalPages = Math.ceil(editingData.length / rowsPerPage);
-  const paginatedData = editingData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
   return (
     <motion.div
