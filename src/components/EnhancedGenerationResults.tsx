@@ -1,3 +1,4 @@
+
 /**
  * ENTERPRISE GENERATION RESULTS COMPONENT
  * Full data review, editing, and quality metrics display
@@ -20,12 +21,17 @@ import {
   Sparkles,
   Brain,
   TrendingUp,
-  Loader2
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  XCircle,
+  Activity
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 import DataReviewEditor from './DataReviewEditor';
@@ -206,7 +212,7 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
     const scores = [
       qualityMetrics.quality_score,
       qualityMetrics.privacy_score,
-      100 - qualityMetrics.bias_score, // Convert bias to positive score
+      100 - qualityMetrics.bias_score, // Convert bias to positive score (lower bias = better)
       qualityMetrics.diversity_score || 85,
       qualityMetrics.coherence_score || 80,
       qualityMetrics.statistical_fidelity || 90
@@ -232,12 +238,11 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
     return 'text-red-400';
   };
 
-  // Utility function for score visualization
-  // const getScoreIcon = (score: number) => {
-  //   if (score >= 90) return <CheckCircle className="w-4 h-4 text-green-400" />;
-  //   if (score >= 60) return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
-  //   return <X className="w-4 h-4 text-red-400" />;
-  // };
+  const getScoreIcon = (score: number) => {
+    if (score >= 90) return <CheckCircle className="w-4 h-4 text-green-400" />;
+    if (score >= 60) return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
+    return <XCircle className="w-4 h-4 text-red-400" />;
+  };
 
   if (isLoading) {
     return (
@@ -282,180 +287,197 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
       className={cn("space-y-6", className)}
     >
       {/* Header with Overall Grade */}
-      {qualityMetrics && (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {qualityMetrics && (
             <div className={`px-6 py-3 rounded-xl ${overallGrade.bgColor} border border-current/20`}>
               <span className={`text-3xl font-bold ${overallGrade.color}`}>
                 {overallGrade.grade}
               </span>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Enterprise Data Quality</h2>
-              <p className="text-gray-400">
-                {editingData.length} rows • {columns.length} columns • Generated with {metadata?.model_used || 'AI'}
+          )}
+          <div>
+            <h2 className="text-2xl font-bold text-white">Generation Results</h2>
+            <p className="text-gray-400">
+              {editingData.length} rows • {columns.length} columns • Generated with {metadata?.model_used || 'AI'}
+            </p>
+            {metadata?.created_at && (
+              <p className="text-sm text-gray-500">
+                Created: {new Date(metadata.created_at).toLocaleString()}
               </p>
-            </div>
+            )}
           </div>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDataPreview(!showDataPreview)}
+            className="border-purple-500/30 hover:bg-purple-500/20"
+          >
+            {showDataPreview ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+            {showDataPreview ? 'Hide' : 'Preview'}
+          </Button>
           
-          <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowReviewModal(true)}
+            className="border-blue-500/30 hover:bg-blue-500/20"
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Review & Edit
+          </Button>
+
+          {onClear && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowDataPreview(!showDataPreview)}
-              className="border-purple-500/30 hover:bg-purple-500/20"
+              onClick={onClear}
+              className="border-red-500/30 hover:bg-red-500/20"
             >
-              {showDataPreview ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
-              {showDataPreview ? 'Hide' : 'Preview'} Data
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear
             </Button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Quality Metrics Dashboard */}
+      {/* Quality Metrics Display */}
       {qualityMetrics && (
-        <Card className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-blue-500/30">
+        <Card className="bg-gray-800/50 border-gray-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-white">
-              <Sparkles className="w-5 h-5 text-blue-400" />
-              AI Quality Assessment
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              Quality Assessment
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Quality Score */}
-              <div className="text-center space-y-3">
-                <div className="flex items-center justify-center gap-2">
-                  <Target className="w-5 h-5 text-green-400" />
-                  <span className="font-medium text-gray-300">Quality Score</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { 
+                  label: 'Data Quality', 
+                  score: qualityMetrics.quality_score, 
+                  icon: Target,
+                  description: 'Overall data accuracy and completeness',
+                  color: 'blue'
+                },
+                { 
+                  label: 'Privacy Protection', 
+                  score: qualityMetrics.privacy_score, 
+                  icon: Shield,
+                  description: 'Level of anonymization and privacy preservation',
+                  color: 'green'
+                },
+                { 
+                  label: 'Bias Mitigation', 
+                  score: 100 - qualityMetrics.bias_score, // Convert to positive score
+                  icon: Users,
+                  description: 'Fairness and representation across demographics',
+                  color: 'purple'
+                },
+                { 
+                  label: 'Data Diversity', 
+                  score: qualityMetrics.diversity_score || 85, 
+                  icon: Sparkles,
+                  description: 'Variety and richness of generated patterns',
+                  color: 'pink'
+                },
+                { 
+                  label: 'Coherence', 
+                  score: qualityMetrics.coherence_score || 80, 
+                  icon: Activity,
+                  description: 'Logical consistency and relationships',
+                  color: 'orange'
+                },
+                { 
+                  label: 'Statistical Fidelity', 
+                  score: qualityMetrics.statistical_fidelity || 90, 
+                  icon: BarChart3,
+                  description: 'Preservation of original data distributions',
+                  color: 'cyan'
+                }
+              ].map((metric) => (
+                <div key={metric.label} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <metric.icon className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-300">{metric.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {getScoreIcon(metric.score)}
+                      <span className={`text-sm font-bold ${getScoreColor(metric.score)}`}>
+                        {Math.round(metric.score)}%
+                      </span>
+                    </div>
+                  </div>
+                  <Progress value={metric.score} className="h-2" />
+                  <p className="text-xs text-gray-500">{metric.description}</p>
                 </div>
-                <div className="text-3xl font-bold text-green-400">
-                  {Math.round(qualityMetrics.quality_score)}%
-                </div>
-                <Progress value={qualityMetrics.quality_score} className="h-3" />
-                <p className="text-xs text-gray-400">Data accuracy and completeness</p>
-              </div>
-              
-              {/* Privacy Score */}
-              <div className="text-center space-y-3">
-                <div className="flex items-center justify-center gap-2">
-                  <Shield className="w-5 h-5 text-blue-400" />
-                  <span className="font-medium text-gray-300">Privacy Score</span>
-                </div>
-                <div className="text-3xl font-bold text-blue-400">
-                  {Math.round(qualityMetrics.privacy_score)}%
-                </div>
-                <Progress value={qualityMetrics.privacy_score} className="h-3" />
-                <p className="text-xs text-gray-400">Anonymization and protection</p>
-              </div>
-              
-              {/* Fairness Score */}
-              <div className="text-center space-y-3">
-                <div className="flex items-center justify-center gap-2">
-                  <Users className="w-5 h-5 text-purple-400" />
-                  <span className="font-medium text-gray-300">Fairness Score</span>
-                </div>
-                <div className="text-3xl font-bold text-purple-400">
-                  {Math.round(100 - qualityMetrics.bias_score)}%
-                </div>
-                <Progress value={100 - qualityMetrics.bias_score} className="h-3" />
-                <p className="text-xs text-gray-400">Bias mitigation and fairness</p>
-              </div>
+              ))}
             </div>
-            
-            {/* Additional Metrics */}
-            {(qualityMetrics.diversity_score || qualityMetrics.coherence_score || qualityMetrics.statistical_fidelity) && (
-              <div className="mt-6 pt-6 border-t border-gray-700/50">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {qualityMetrics.diversity_score && (
-                    <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-cyan-400" />
-                        <span className="text-sm text-gray-300">Diversity</span>
-                      </div>
-                      <span className={`text-sm font-bold ${getScoreColor(qualityMetrics.diversity_score)}`}>
-                        {Math.round(qualityMetrics.diversity_score)}%
-                      </span>
-                    </div>
-                  )}
-                  
-                  {qualityMetrics.coherence_score && (
-                    <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <Brain className="w-4 h-4 text-pink-400" />
-                        <span className="text-sm text-gray-300">Coherence</span>
-                      </div>
-                      <span className={`text-sm font-bold ${getScoreColor(qualityMetrics.coherence_score)}`}>
-                        {Math.round(qualityMetrics.coherence_score)}%
-                      </span>
-                    </div>
-                  )}
-                  
-                  {qualityMetrics.statistical_fidelity && (
-                    <div className="flex items-center justify-between p-3 bg-gray-700/30 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-yellow-400" />
-                        <span className="text-sm text-gray-300">Statistical Fidelity</span>
-                      </div>
-                      <span className={`text-sm font-bold ${getScoreColor(qualityMetrics.statistical_fidelity)}`}>
-                        {Math.round(qualityMetrics.statistical_fidelity)}%
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Action Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => setShowReviewModal(true)}
-            variant="outline"
-            className="border-blue-500/30 hover:bg-blue-500/20"
-          >
-            <Edit className="w-4 h-4 mr-2" />
-            Review & Edit Data
-          </Button>
-          
-          <Select value={downloadFormat} onValueChange={(value: 'csv' | 'json' | 'excel') => setDownloadFormat(value)}>
-            <SelectTrigger className="w-32 bg-gray-700 border-gray-600">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="csv">CSV</SelectItem>
-              <SelectItem value="json">JSON</SelectItem>
-              <SelectItem value="excel">Excel</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Button
-            onClick={() => handleDownload()}
-            disabled={isDownloading}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {isDownloading ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Download className="w-4 h-4 mr-2" />
-            )}
-            Download {downloadFormat.toUpperCase()}
-          </Button>
-        </div>
-        
-        {onClear && (
-          <Button 
-            variant="outline" 
-            onClick={onClear} 
-            className="border-gray-600 hover:bg-gray-700"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Clear Results
-          </Button>
-        )}
+      {/* Statistics Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="bg-gray-800/50 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-500/20 rounded-lg">
+                <Database className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{editingData.length}</p>
+                <p className="text-sm text-gray-400">Records Generated</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-800/50 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/20 rounded-lg">
+                <BarChart3 className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{columns.length}</p>
+                <p className="text-sm text-gray-400">Columns</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-800/50 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-500/20 rounded-lg">
+                <Brain className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{metadata?.provider || 'AI'}</p>
+                <p className="text-sm text-gray-400">AI Provider</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gray-800/50 border-gray-700">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-500/20 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-orange-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{metadata?.generation_time || 'N/A'}</p>
+                <p className="text-sm text-gray-400">Generation Time</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Data Preview */}
@@ -469,27 +491,27 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
             <Card className="bg-gray-800/50 border-gray-700">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-white">
-                  <Database className="w-5 h-5 text-blue-400" />
-                  Data Preview ({editingData.length} total rows)
+                  <Eye className="w-5 h-5 text-blue-400" />
+                  Data Preview (First 10 rows)
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-96">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-700">
                         {columns.map((key) => (
-                          <th key={key} className="px-4 py-3 text-left text-sm font-medium text-gray-300">
+                          <th key={key} className="px-4 py-2 text-left text-sm font-medium text-gray-300">
                             {key}
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedData.map((row, index) => (
-                        <tr key={index} className="border-b border-gray-700/50 hover:bg-gray-700/20">
+                      {editingData.slice(0, 10).map((row, index) => (
+                        <tr key={index} className="border-b border-gray-700/50">
                           {columns.map((key) => (
-                            <td key={key} className="px-4 py-3 text-sm text-gray-300">
+                            <td key={key} className="px-4 py-2 text-sm text-gray-300">
                               {String(row[key] || '').length > 50 
                                 ? `${String(row[key] || '').substring(0, 50)}...` 
                                 : String(row[key] || '-')
@@ -501,63 +523,101 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
                     </tbody>
                   </table>
                 </div>
-                
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <p className="text-sm text-gray-400">
-                      Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, editingData.length)} of {editingData.length} rows
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                        className="border-gray-600"
-                      >
-                        Previous
-                      </Button>
-                      <span className="text-sm text-gray-400">
-                        Page {currentPage} of {totalPages}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                        className="border-gray-600"
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Data Review Modal */}
+      {/* Download Section */}
+      <Card className="bg-gray-800/50 border-gray-700">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-white">
+            <Download className="w-5 h-5 text-purple-400" />
+            Export Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-4">
+            <Select value={downloadFormat} onValueChange={(value: any) => setDownloadFormat(value)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="csv">CSV</SelectItem>
+                <SelectItem value="json">JSON</SelectItem>
+                <SelectItem value="excel">Excel</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button
+              onClick={() => handleDownload()}
+              disabled={isDownloading}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              {isDownloading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              Download {downloadFormat.toUpperCase()}
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-4 text-sm text-gray-400">
+            <Badge variant="outline" className="border-gray-600">
+              {editingData.length} rows
+            </Badge>
+            <Badge variant="outline" className="border-gray-600">
+              {columns.length} columns
+            </Badge>
+            {qualityMetrics && (
+              <Badge variant="outline" className={`border-current ${overallGrade.color}`}>
+                Grade: {overallGrade.grade}
+              </Badge>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Review Modal */}
       {showReviewModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setShowReviewModal(false)}
+        >
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-6xl max-h-[90vh] overflow-hidden"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-6xl max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-6 border-b border-gray-700">
-              <h2 className="text-xl font-semibold text-white">Review & Edit Generated Data</h2>
-              <button
-                onClick={() => setShowReviewModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              <h2 className="text-xl font-bold text-white">Review & Edit Generated Data</h2>
+              <div className="flex items-center gap-2">
+                {qualityMetrics && (
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="text-green-400">Quality: {Math.round(qualityMetrics.quality_score)}%</span>
+                    <span className="text-blue-400">Privacy: {Math.round(qualityMetrics.privacy_score)}%</span>
+                    <span className="text-purple-400">Bias: {Math.round(qualityMetrics.bias_score)}%</span>
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowReviewModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-theme(spacing.24))]">
+            <div className="p-6 h-[calc(90vh-120px)] overflow-auto">
               <DataReviewEditor
                 data={editingData}
                 onDataUpdate={handleDataUpdate}
@@ -565,44 +625,8 @@ export const EnhancedGenerationResults: React.FC<EnhancedGenerationResultsProps>
                 isEditing={isEditing}
               />
             </div>
-            
-            <div className="flex items-center justify-between p-6 border-t border-gray-700 bg-gray-800/50">
-              <div className="flex items-center gap-4">
-                <Select value={downloadFormat} onValueChange={(value: 'csv' | 'json' | 'excel') => setDownloadFormat(value)}>
-                  <SelectTrigger className="w-32 bg-gray-700 border-gray-600">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="csv">CSV</SelectItem>
-                    <SelectItem value="json">JSON</SelectItem>
-                    <SelectItem value="excel">Excel</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button
-                  onClick={() => handleDownload()}
-                  disabled={isDownloading}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {isDownloading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  Save & Download
-                </Button>
-              </div>
-              
-              <Button
-                variant="outline"
-                onClick={() => setShowReviewModal(false)}
-                className="border-gray-600 hover:bg-gray-700"
-              >
-                Close
-              </Button>
-            </div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </motion.div>
   );

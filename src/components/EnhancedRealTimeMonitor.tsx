@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -29,8 +30,8 @@ import { cn } from '../lib/utils';
 interface AgentLog {
   id: string;
   timestamp: Date;
-  type: 'initialization' | 'domain_analysis' | 'privacy_assessment' | 'bias_detection' | 'relationship_mapping' | 'quality_planning' | 'data_generation' | 'quality_validation' | 'final_assembly' | 'completion' | 'error';
-  status: 'started' | 'in_progress' | 'completed' | 'error';
+  type: 'initialization' | 'domain_analysis' | 'privacy_assessment' | 'bias_detection' | 'relationship_mapping' | 'quality_planning' | 'data_generation' | 'quality_validation' | 'final_assembly' | 'completion' | 'error' | 'websocket' | 'health';
+  status: 'started' | 'in_progress' | 'completed' | 'error' | 'connected' | 'ready';
   message: string;
   agent: string;
   progress?: number;
@@ -45,6 +46,7 @@ interface AgentLog {
     duration?: number;
     stack?: string;
     context?: any;
+    jobId?: string;
   };
   level: 'info' | 'success' | 'warning' | 'error';
 }
@@ -67,7 +69,7 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
   
   const { isConnected, lastMessage } = useWebSocket('guest_user');
 
-  // Enhanced real-time message parsing
+  // Enhanced real-time message parsing for your actual backend logs
   useEffect(() => {
     if (!lastMessage || isPaused) return;
 
@@ -91,7 +93,7 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
       if (parsedLog) {
         console.log('✅ Parsed log entry:', parsedLog);
         setLogs(prev => {
-          const updated = [parsedLog!, ...prev.slice(0, 49)]; // Keep last 50 logs
+          const updated = [parsedLog!, ...prev.slice(0, 99)]; // Keep last 100 logs
           return updated;
         });
 
@@ -115,9 +117,85 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
         metadata: { error: String(error) }
       };
       
-      setLogs(prev => [errorLog, ...prev.slice(0, 49)]);
+      setLogs(prev => [errorLog, ...prev.slice(0, 99)]);
     }
   }, [lastMessage, isPaused]);
+
+  // Simulate backend logs for development/testing
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const simulateBackendLogs = () => {
+      // Simulate your actual backend log patterns
+      const sampleLogs = [
+        "🤖 Initializing Multi-Agent Orchestrator...",
+        "✅ Gemini 2.0 Flash-Lite initialized successfully",
+        "✅ PrivacyAgent initialized",
+        "✅ QualityAgent initialized", 
+        "✅ DomainExpertAgent initialized",
+        "✅ BiasDetectionAgent initialized",
+        "✅ RelationshipAgent initialized",
+        "🎯 Multi-Agent Orchestrator ready!",
+        "🚀 Starting Multi-Agent Orchestration for job abc123",
+        "🔄 [5%] initialization: 🤖 Initializing AI agents...",
+        "🔄 [10%] domain_analysis: 🧠 Domain Expert analyzing data structure...",
+        "🧠 Domain Expert analyzing data structure...",
+        "✅ Domain Expert: Detected healthcare domain",
+        "🔄 [25%] domain_analysis: ✅ Domain Expert: Detected healthcare domain",
+        "🔄 [30%] privacy_assessment: 🔒 Privacy Agent assessing data sensitivity...",
+        "🔒 Privacy Agent analyzing data sensitivity...",
+        "✅ Privacy Agent: 60% privacy score",
+        "🔄 [40%] privacy_assessment: ✅ Privacy Agent: 60% privacy score",
+        "🔄 [45%] bias_detection: ⚖️ Bias Detection Agent analyzing for fairness...",
+        "⚖️ Bias Detection Agent analyzing for fairness...",
+        "✅ Bias Detector: 25% bias score",
+        "🔄 [55%] bias_detection: ✅ Bias Detector: 25% bias score",
+        "🔄 [60%] relationship_mapping: 🔗 Relationship Agent mapping data connections...",
+        "🔗 Relationship Agent mapping data connections...",
+        "✅ Relationship Agent: Mapped 3 relationships",
+        "🔄 [70%] relationship_mapping: ✅ Relationship Agent: Mapped 3 relationships",
+        "🔄 [72%] quality_planning: 🎯 Quality Agent planning generation strategy...",
+        "🎯 Quality Agent planning generation strategy...",
+        "✅ Quality Agent: Generation strategy optimized",
+        "🔄 [75%] quality_planning: ✅ Quality Agent: Generation strategy optimized",
+        "🤖 GEMINI: [80%] data_generation: 🤖 Generating synthetic data with Gemini 2.0 Flash...",
+        "🤖 GEMINI: [85%] data_generation: 🔮 Gemini 2.0 Flash processing schema and constraints...",
+        "🎨 Generating synthetic data with multi-agent context...",
+        "✅ Generated 100 records using Gemini",
+        "🤖 GEMINI: [90%] data_generation: ✅ Gemini 2.0 Flash generated 100 high-quality records",
+        "🔄 [92%] quality_validation: 🔍 Quality Agent validating generated data...",
+        "🔍 Quality Agent validating generated data...",
+        "✅ Quality validation: 94% overall quality",
+        "🔄 [95%] quality_validation: ✅ Quality validation: 94% quality",
+        "🔄 [98%] final_assembly: 📦 Assembling final results...",
+        "🔄 [100%] completion: 🎉 Multi-agent generation completed successfully!",
+        "🎉 Multi-Agent Orchestration completed successfully!"
+      ];
+
+      let index = 0;
+      const interval = setInterval(() => {
+        if (index < sampleLogs.length && !isPaused) {
+          const logMessage = sampleLogs[index];
+          const parsedLog = parseTextMessage(logMessage);
+          if (parsedLog) {
+            setLogs(prev => [parsedLog, ...prev.slice(0, 99)]);
+            if (parsedLog.progress !== undefined) {
+              setCurrentProgress(parsedLog.progress);
+            }
+          }
+          index++;
+        } else {
+          clearInterval(interval);
+        }
+      }, 2000); // Simulate log every 2 seconds
+
+      return () => clearInterval(interval);
+    };
+
+    // Start simulation after a short delay
+    const timeout = setTimeout(simulateBackendLogs, 3000);
+    return () => clearTimeout(timeout);
+  }, [isConnected, isPaused]);
 
   // Parse generation update messages
   const parseGenerationUpdate = (data: any): AgentLog | null => {
@@ -180,46 +258,85 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
     };
   };
 
-  // Parse text-based log messages
+  // Parse text-based log messages (your actual backend format)
   const parseTextMessage = (message: string): AgentLog | null => {
     const timestamp = new Date();
-    const id = `text_${timestamp.getTime()}`;
+    const id = `text_${timestamp.getTime()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Enhanced pattern matching for your backend logs
+    // Enhanced pattern matching for your exact backend logs
     const patterns = {
-      initialization: /🤖\s*Initializing\s+(.*)/i,
-      domainAnalysis: /🧠\s*Domain Expert analyzing/i,
-      domainComplete: /✅\s*Domain Expert.*detected\s+(\w+)\s+domain/i,
-      privacyStart: /🔒\s*Privacy Agent analyzing/i,
+      // WebSocket patterns
+      websocketConnect: /🔌\s*WebSocket connected:\s*(\w+)/i,
+      websocketDisconnect: /🔌\s*WebSocket disconnected:\s*(\w+)/i,
+      
+      // Initialization patterns
+      initialization: /🤖\s*Initializing Multi-Agent Orchestrator/i,
+      geminiInit: /✅\s*Gemini.*initialized successfully/i,
+      agentInit: /✅\s*(Privacy|Quality|DomainExpert|BiasDetection|Relationship)Agent initialized/i,
+      orchestratorReady: /🎯\s*Multi-Agent Orchestrator ready/i,
+      
+      // Generation flow patterns
+      orchestrationStart: /🚀\s*Starting Multi-Agent Orchestration for job\s*([a-f0-9-]+)/i,
+      progressUpdate: /🔄\s*\[(\d+)%\]\s*(\w+):\s*(.*)/i,
+      
+      // Agent-specific patterns
+      domainAnalyzing: /🧠\s*Domain Expert analyzing/i,
+      domainComplete: /✅\s*Domain Expert.*[Dd]etected\s+(\w+)\s+domain/i,
+      privacyAnalyzing: /🔒\s*Privacy Agent (analyzing|assessing)/i,
       privacyComplete: /✅\s*Privacy Agent.*(\d+)%\s+privacy/i,
-      biasStart: /⚖️\s*Bias Detection Agent/i,
+      biasAnalyzing: /⚖️\s*Bias Detection Agent/i,
       biasComplete: /✅\s*Bias Detector.*(\d+)%\s+bias/i,
-      relationshipStart: /🔗\s*Relationship Agent/i,
-      relationshipComplete: /✅\s*Relationship Agent.*(\d+)\s+relationships/i,
-      qualityStart: /🎯\s*Quality Agent/i,
+      relationshipAnalyzing: /🔗\s*Relationship Agent/i,
+      relationshipComplete: /✅\s*Relationship Agent.*[Mm]apped\s+(\d+)\s+relationships/i,
+      qualityPlanning: /🎯\s*Quality Agent.*planning/i,
       qualityComplete: /✅\s*Quality Agent.*optimized/i,
-      generationStart: /🤖\s*GEMINI.*Generating/i,
-      generationComplete: /✅\s*Generated\s+(\d+)\s+records/i,
+      
+      // Generation patterns
+      geminiGenerating: /🤖\s*GEMINI.*[Gg]enerating/i,
+      geminiProcessing: /🔮\s*Gemini.*processing/i,
+      generationContext: /🎨\s*Generating synthetic data/i,
+      recordsGenerated: /✅\s*Generated\s+(\d+)\s+records/i,
+      geminiComplete: /✅\s*Gemini.*generated\s+(\d+).*records/i,
+      
+      // Validation patterns
       validationStart: /🔍\s*Quality Agent validating/i,
       validationComplete: /✅\s*Quality validation.*(\d+)%/i,
-      completion: /🎉\s*.*generation completed/i,
-      error: /❌|ERROR|Failed|Exception/i,
-      warning: /⚠️|WARNING|Warn/i
+      
+      // Completion patterns
+      finalAssembly: /📦\s*Assembling final results/i,
+      completion: /🎉.*generation.*completed/i,
+      orchestrationComplete: /🎉\s*Multi-Agent Orchestration completed/i,
+      
+      // Error and warning patterns
+      warning: /⚠️|WARNING|[Ww]arn/i,
+      error: /❌|ERROR|[Ff]ailed|[Ee]xception/i,
+      
+      // Health check patterns
+      healthCheck: /GET.*\/api\/health.*HTTP/i,
+      requestLog: /POST.*\/api\/generation/i,
     };
 
-    // Extract progress percentage
+    // Extract progress percentage from [X%] format
     const progressMatch = message.match(/\[(\d+)%\]/);
     const progress = progressMatch ? parseInt(progressMatch[1]) : undefined;
 
-    // Find matching pattern
+    // Extract job ID
+    const jobMatch = message.match(/job\s+([a-f0-9-]+)/i);
+    const jobId = jobMatch ? jobMatch[1] : undefined;
+
+    // Find matching pattern and create appropriate log entry
     for (const [patternName, regex] of Object.entries(patterns)) {
       const match = message.match(regex);
       if (match) {
-        const agent = extractAgentFromMessage(message);
+        const agent = extractAgentFromMessage(message, patternName);
         const type = mapPatternToType(patternName);
+        const status = getStatusFromPattern(patternName);
+        const level = getLevelFromPattern(patternName, message);
         
         // Extract metadata based on pattern
         const metadata: any = {};
+        if (jobId) metadata.jobId = jobId;
+        
         if (patternName.includes('domain') && match[1]) {
           metadata.domain = match[1];
         } else if (patternName.includes('privacy') && match[1]) {
@@ -228,7 +345,7 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
           metadata.biasScore = parseInt(match[1]);
         } else if (patternName.includes('relationship') && match[1]) {
           metadata.relationshipCount = parseInt(match[1]);
-        } else if (patternName.includes('generation') && match[1]) {
+        } else if ((patternName.includes('generated') || patternName.includes('geminiComplete')) && match[1]) {
           metadata.recordCount = parseInt(match[1]);
         } else if (patternName.includes('validation') && match[1]) {
           metadata.qualityScore = parseInt(match[1]);
@@ -238,29 +355,32 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
           id,
           timestamp,
           type,
-          status: patternName.includes('Complete') || patternName === 'completion' ? 'completed' : 
-                 patternName.includes('error') ? 'error' : 'in_progress',
+          status,
           message: message.trim(),
           agent,
           progress,
-          level: patternName.includes('error') ? 'error' : 
-                patternName.includes('warning') ? 'warning' :
-                patternName.includes('Complete') || patternName === 'completion' ? 'success' : 'info',
+          level,
           metadata
         };
       }
     }
 
-    // Default parsing for unmatched messages
+    // Default parsing for unmatched messages - still create logs for visibility
+    const defaultAgent = extractAgentFromMessage(message, '');
+    const defaultLevel = message.includes('ERROR') || message.includes('❌') ? 'error' :
+                        message.includes('WARNING') || message.includes('⚠️') ? 'warning' :
+                        message.includes('✅') || message.includes('SUCCESS') ? 'success' : 'info';
+
     return {
       id,
       timestamp,
       type: 'initialization',
-      status: 'in_progress',
+      status: defaultLevel === 'success' ? 'completed' : 'in_progress',
       message: message.trim(),
-      agent: extractAgentFromMessage(message),
+      agent: defaultAgent,
       progress,
-      level: 'info'
+      level: defaultLevel,
+      metadata: jobId ? { jobId } : undefined
     };
   };
 
@@ -302,20 +422,49 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
     if (pattern.includes('privacy')) return 'privacy_assessment';
     if (pattern.includes('bias')) return 'bias_detection';
     if (pattern.includes('relationship')) return 'relationship_mapping';
-    if (pattern.includes('quality')) return 'quality_planning';
-    if (pattern.includes('generation')) return 'data_generation';
+    if (pattern.includes('quality')) return pattern.includes('validation') ? 'quality_validation' : 'quality_planning';
+    if (pattern.includes('generat') || pattern.includes('gemini')) return 'data_generation';
     if (pattern.includes('validation')) return 'quality_validation';
-    if (pattern.includes('completion')) return 'completion';
+    if (pattern.includes('assembly')) return 'final_assembly';
+    if (pattern.includes('completion') || pattern.includes('orchestrationComplete')) return 'completion';
+    if (pattern.includes('websocket')) return 'websocket';
+    if (pattern.includes('health') || pattern.includes('request')) return 'health';
     return 'initialization';
   };
 
-  const extractAgentFromMessage = (message: string): string => {
+  const getStatusFromPattern = (pattern: string): AgentLog['status'] => {
+    if (pattern.includes('Complete') || pattern.includes('completion') || pattern.includes('ready')) return 'completed';
+    if (pattern.includes('error') || pattern.includes('ERROR')) return 'error';
+    if (pattern.includes('connect')) return 'connected';
+    return 'in_progress';
+  };
+
+  const getLevelFromPattern = (pattern: string, message: string): AgentLog['level'] => {
+    if (pattern.includes('error') || message.includes('ERROR') || message.includes('❌')) return 'error';
+    if (pattern.includes('warning') || message.includes('WARNING') || message.includes('⚠️')) return 'warning';
+    if (pattern.includes('Complete') || pattern.includes('completion') || message.includes('✅')) return 'success';
+    return 'info';
+  };
+
+  const extractAgentFromMessage = (message: string, pattern: string = ''): string => {
+    // Check for specific agent mentions in message
     if (message.includes('Domain Expert')) return 'Domain Expert';
     if (message.includes('Privacy Agent')) return 'Privacy Agent';
     if (message.includes('Bias Detection') || message.includes('Bias Detector')) return 'Bias Detector';
     if (message.includes('Relationship Agent')) return 'Relationship Agent';
     if (message.includes('Quality Agent')) return 'Quality Agent';
     if (message.includes('GEMINI') || message.includes('Gemini')) return 'Gemini AI';
+    if (message.includes('Orchestrator')) return 'Orchestrator';
+    if (pattern.includes('websocket') || message.includes('WebSocket')) return 'WebSocket';
+    if (pattern.includes('health') || message.includes('health')) return 'Health Monitor';
+    
+    // Agent initialization patterns
+    if (message.includes('PrivacyAgent initialized')) return 'Privacy Agent';
+    if (message.includes('QualityAgent initialized')) return 'Quality Agent';
+    if (message.includes('DomainExpertAgent initialized')) return 'Domain Expert';
+    if (message.includes('BiasDetectionAgent initialized')) return 'Bias Detector';
+    if (message.includes('RelationshipAgent initialized')) return 'Relationship Agent';
+    
     return 'System';
   };
 
@@ -327,6 +476,9 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
       'Relationship Agent': Database,
       'Quality Agent': Target,
       'Gemini AI': Zap,
+      'Orchestrator': Activity,
+      'WebSocket': Activity,
+      'Health Monitor': Activity,
       'System': Activity
     };
     const IconComponent = iconMap[agent] || Activity;
@@ -383,7 +535,7 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
             isConnected ? "bg-green-400" : "bg-red-400"
           )}></div>
           <h3 className="text-white font-medium">
-            {isCollapsed ? "AI Monitor" : "AI Agent Performance Monitor"}
+            {isCollapsed ? "AI Monitor" : "Live AI Agent Monitor"}
           </h3>
           <Badge variant="outline" className="text-xs">
             {logs.length} logs
@@ -428,7 +580,7 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
           {currentProgress > 0 && currentProgress < 100 && (
             <div className="p-4 border-b border-gray-700/50">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-300">Overall Progress</span>
+                <span className="text-sm text-gray-300">Generation Progress</span>
                 <span className="text-sm text-blue-400 font-medium">{currentProgress}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2">
@@ -478,6 +630,9 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
                 <RotateCcw className="w-3 h-3 mr-1" />
                 Clear
               </Button>
+              <Badge variant={isPaused ? "destructive" : "default"} className="text-xs">
+                {isPaused ? "Paused" : "Live"}
+              </Badge>
             </div>
           </div>
 
@@ -547,8 +702,11 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
                               {log.metadata.recordCount && (
                                 <span className="text-gray-400">Records: {log.metadata.recordCount}</span>
                               )}
-                              {log.metadata.relationshipCount && (
+                              {log.metadata.relationshipCount !== undefined && (
                                 <span className="text-gray-400">Relations: {log.metadata.relationshipCount}</span>
+                              )}
+                              {log.metadata.jobId && (
+                                <span className="text-gray-500">Job: {log.metadata.jobId.substring(0, 8)}...</span>
                               )}
                             </div>
                           )}

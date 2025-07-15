@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -111,7 +112,7 @@ const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full">
       {/* Header Controls */}
       <div className="flex items-center justify-between">
         <div>
@@ -199,9 +200,9 @@ const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         </motion.div>
       )}
 
-      {/* Data Table */}
-      <Card className="bg-gray-800/50 border-gray-700">
-        <CardHeader className="flex flex-row items-center justify-between">
+      {/* Data Table with proper height */}
+      <Card className="bg-gray-800/50 border-gray-700 flex flex-col h-96">
+        <CardHeader className="flex flex-row items-center justify-between flex-shrink-0">
           <CardTitle className="text-white">
             Data Table ({localData.length} rows)
           </CardTitle>
@@ -216,10 +217,10 @@ const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
             </Button>
           )}
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto max-h-96">
+        <CardContent className="flex-1 overflow-hidden p-0">
+          <div className="h-full overflow-auto">
             <table className="w-full">
-              <thead className="bg-gray-700/50 sticky top-0">
+              <thead className="bg-gray-700/50 sticky top-0 z-10">
                 <tr>
                   {editMode === 'manual' && (
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-300 w-20">
@@ -227,7 +228,7 @@ const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
                     </th>
                   )}
                   {Object.keys(localData[0] || {}).map((key) => (
-                    <th key={key} className="px-4 py-3 text-left text-sm font-medium text-gray-300">
+                    <th key={key} className="px-4 py-3 text-left text-sm font-medium text-gray-300 min-w-32">
                       {key}
                     </th>
                   ))}
