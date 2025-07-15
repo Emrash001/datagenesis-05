@@ -144,16 +144,22 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     
     const sampleRow = data[0];
     
-    // Manual selection column
+    // Selection column using standard Column properties
     const selectionColumn: Column<DataRow> = {
       key: 'select',
-      name: '',
-      width: 50,
-      minWidth: 50,
+      name: 'Select',
+      width: 60,
       resizable: false,
       sortable: false,
-      frozen: true,
-      renderHeaderCell: () => (
+      formatter: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={selectedRows.has(row.id)}
+          onChange={(e) => handleRowSelect(row.id, e.target.checked)}
+          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+        />
+      ),
+      headerRenderer: () => (
         <input
           type="checkbox"
           checked={selectedRows.size === filteredData.length && filteredData.length > 0}
@@ -163,14 +169,6 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
             }
           }}
           onChange={(e) => handleSelectAll(e.target.checked)}
-          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
-        />
-      ),
-      renderCell: ({ row }: { row: DataRow }) => (
-        <input
-          type="checkbox"
-          checked={selectedRows.has(row.id)}
-          onChange={(e) => handleRowSelect(row.id, e.target.checked)}
           className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
         />
       )
@@ -185,7 +183,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         sortable: true,
         editable: true,
         width: getColumnWidth(key, sampleRow[key]),
-        renderEditCell: ({ row, onRowChange, column }: { row: DataRow; onRowChange: (row: DataRow) => void; column: Column<DataRow> }) => (
+        editor: ({ row, onRowChange, column }) => (
           <input
             type={getInputType(column.key, row[column.key])}
             value={row[column.key] || ''}
@@ -205,7 +203,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
             autoFocus
           />
         ),
-        renderCell: ({ row, column }: { row: DataRow; column: Column<DataRow> }) => (
+        formatter: ({ row }) => (
           <div className="px-2 py-1 text-sm text-gray-300">
             {formatCellValue(row[column.key])}
           </div>
