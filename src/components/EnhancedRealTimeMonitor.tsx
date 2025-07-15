@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Activity, 
@@ -15,7 +16,6 @@ import {
   Play,
   RotateCcw,
   Search,
-  Cog,
   X,
   CheckCircle,
   AlertTriangle,
@@ -45,18 +45,18 @@ interface AgentLog {
     recordCount?: number;
     error?: string;
     duration?: number;
+    stack?: string;
+    context?: any;
   };
   level: 'info' | 'success' | 'warning' | 'error';
 }
 
 interface EnhancedRealTimeMonitorProps {
-  isGenerating?: boolean;
   onClose?: () => void;
   className?: string;
 }
 
 export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = ({ 
-  isGenerating = false,
   onClose,
   className
 }) => {

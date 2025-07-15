@@ -1,4 +1,3 @@
-
 /**
  * REVOLUTIONARY DATA REVIEW & EDITING SYSTEM
  * Excel-like editing with natural language modifications
@@ -93,6 +92,17 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     setIsLoading(false);
   }, [initialData]);
 
+  // Filtered data based on search
+  const filteredData = useMemo(() => {
+    if (!searchTerm) return data;
+    
+    return data.filter(row =>
+      Object.values(row).some(value =>
+        String(value).toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
+  }, [data, searchTerm]);
+
   // Create sample data for demo purposes
   const createSampleData = (): DataRow[] => {
     return Array.from({ length: 10 }, (_, index) => ({
@@ -126,7 +136,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     } else {
       setSelectedRows(new Set());
     }
-  }, []);
+  }, [filteredData]);
 
   // Get column definitions from data
   const columns = useMemo((): Column<DataRow>[] => {
@@ -143,16 +153,20 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
       resizable: false,
       sortable: false,
       frozen: true,
-      headerRenderer: () => (
+      renderHeaderCell: () => (
         <input
           type="checkbox"
           checked={selectedRows.size === filteredData.length && filteredData.length > 0}
-          indeterminate={selectedRows.size > 0 && selectedRows.size < filteredData.length}
+          ref={(input) => {
+            if (input) {
+              input.indeterminate = selectedRows.size > 0 && selectedRows.size < filteredData.length;
+            }
+          }}
           onChange={(e) => handleSelectAll(e.target.checked)}
           className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
         />
       ),
-      formatter: ({ row }) => (
+      renderCell: ({ row }: { row: DataRow }) => (
         <input
           type="checkbox"
           checked={selectedRows.has(row.id)}
@@ -171,7 +185,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         sortable: true,
         editable: true,
         width: getColumnWidth(key, sampleRow[key]),
-        editor: ({ row, onRowChange, column }) => (
+        renderEditCell: ({ row, onRowChange, column }: { row: DataRow; onRowChange: (row: DataRow) => void; column: Column<DataRow> }) => (
           <input
             type={getInputType(column.key, row[column.key])}
             value={row[column.key] || ''}
@@ -191,7 +205,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
             autoFocus
           />
         ),
-        formatter: ({ row, column }) => (
+        renderCell: ({ row, column }: { row: DataRow; column: Column<DataRow> }) => (
           <div className="px-2 py-1 text-sm text-gray-300">
             {formatCellValue(row[column.key])}
           </div>
@@ -225,17 +239,6 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     if (typeof value === 'number') return value.toLocaleString();
     return String(value);
   };
-
-  // Filtered data based on search
-  const filteredData = useMemo(() => {
-    if (!searchTerm) return data;
-    
-    return data.filter(row =>
-      Object.values(row).some(value =>
-        String(value).toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
-  }, [data, searchTerm]);
 
   // Add to edit history
   const addToHistory = useCallback((action: string, changes: any, description: string) => {

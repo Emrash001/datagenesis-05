@@ -14,8 +14,6 @@ import {
   Shield,
   Users,
   Target,
-  CheckCircle,
-  AlertTriangle,
   X,
   Eye,
   EyeOff,
