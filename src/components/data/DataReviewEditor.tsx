@@ -7,9 +7,6 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { DataGrid, Column, RenderCellProps, RenderHeaderCellProps, RenderEditCellProps } from 'react-data-grid';
-import 'react-data-grid/lib/styles.css';
-
 import { 
   MessageSquare, 
   Wand2, 
@@ -21,7 +18,10 @@ import {
   Trash2,
   Plus,
   Loader2,
-  Download
+  Download,
+  Edit3,
+  Check,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -64,6 +64,8 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [editingCell, setEditingCell] = useState<{rowId: string, column: string} | null>(null);
+  const [editValue, setEditValue] = useState('');
   
   const [nlPrompt, setNlPrompt] = useState('');
   const [isProcessingNL, setIsProcessingNL] = useState(false);
@@ -104,6 +106,12 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     );
   }, [data, searchTerm]);
 
+  // Get column keys (excluding id)
+  const columns = useMemo(() => {
+    if (data.length === 0) return [];
+    return Object.keys(data[0]).filter(key => key !== 'id');
+  }, [data]);
+
   // Create sample data for demo purposes
   const createSampleData = (): DataRow[] => {
     return Array.from({ length: 10 }, (_, index) => ({
@@ -118,7 +126,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     }));
   };
 
-  // Manual row selection handlers
+  // Row selection handlers
   const handleRowSelect = useCallback((rowId: string, selected: boolean) => {
     setSelectedRows(prev => {
       const newSet = new Set(prev);
@@ -139,99 +147,54 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     }
   }, [filteredData]);
 
-  // Get column definitions from data
-  const columns = useMemo((): Column<DataRow>[] => {
-    if (data.length === 0) return [];
-    
-    const sampleRow = data[0];
-    
-    // Selection column using standard Column properties
-    const selectionColumn: Column<DataRow> = {
-      key: 'select',
-      name: 'Select',
-      width: 60,
-      resizable: false,
-      sortable: false,
-      renderCell: (props: RenderCellProps<DataRow>) => (
-        <input
-          type="checkbox"
-          checked={selectedRows.has(props.row.id)}
-          onChange={(e) => handleRowSelect(props.row.id, e.target.checked)}
-          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
-        />
-      ),
-      renderHeaderCell: (_props: RenderHeaderCellProps<DataRow>) => (
-        <input
-          type="checkbox"
-          checked={selectedRows.size === filteredData.length && filteredData.length > 0}
-          ref={(input) => {
-            if (input) {
-              input.indeterminate = selectedRows.size > 0 && selectedRows.size < filteredData.length;
-            }
-          }}
-          onChange={(e) => handleSelectAll(e.target.checked)}
-          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
-        />
-      )
-    };
+  // Cell editing handlers
+  const handleCellEdit = (rowId: string, column: string, currentValue: any) => {
+    setEditingCell({ rowId, column });
+    setEditValue(String(currentValue || ''));
+  };
 
-    const dataColumns: Column<DataRow>[] = Object.keys(sampleRow)
-      .filter(key => key !== 'id')
-      .map(key => ({
-        key,
-        name: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'),
-        resizable: true,
-        sortable: true,
-        editable: true,
-        width: getColumnWidth(key, sampleRow[key]),
-        renderEditCell: (props: RenderEditCellProps<DataRow>) => (
-          <input
-            type={getInputType(props.column.key, props.row[props.column.key])}
-            value={props.row[props.column.key] || ''}
-            onChange={(e) => {
-              let value: any = e.target.value;
-              
-              // Type conversion based on original value type
-              if (typeof props.row[props.column.key] === 'number') {
-                value = parseFloat(value) || 0;
-              } else if (typeof props.row[props.column.key] === 'boolean') {
-                value = value === 'true';
-              }
-              
-              props.onRowChange({ ...props.row, [props.column.key]: value });
-            }}
-            className="w-full h-full px-2 bg-gray-700 text-white border-none outline-none focus:bg-gray-600"
-            autoFocus
-          />
-        ),
-        renderCell: (props: RenderCellProps<DataRow>) => (
-          <div className="px-2 py-1 text-sm text-gray-300">
-            {formatCellValue(props.row[props.column.key])}
-          </div>
-        )
-      }));
+  const handleCellSave = () => {
+    if (!editingCell) return;
 
-    return [selectionColumn, ...dataColumns];
-  }, [data, selectedRows, filteredData, handleRowSelect, handleSelectAll]);
+    const { rowId, column } = editingCell;
+    const oldData = [...data];
+    
+    const newData = data.map(row => {
+      if (row.id === rowId) {
+        let value: any = editValue;
+        
+        // Type conversion based on original value type
+        const originalValue = row[column];
+        if (typeof originalValue === 'number') {
+          value = parseFloat(editValue) || 0;
+        } else if (typeof originalValue === 'boolean') {
+          value = editValue.toLowerCase() === 'true';
+        }
+        
+        return { ...row, [column]: value };
+      }
+      return row;
+    });
+    
+    setData(newData);
+    onDataChange?.(newData.map(row => {
+      const { id, ...rest } = row;
+      return rest;
+    }));
+    
+    addToHistory('edit_cell', { old: oldData, new: newData }, `Edited ${column} in row ${rowId}`);
+    
+    setEditingCell(null);
+    setEditValue('');
+    toast.success('Cell updated successfully');
+  };
+
+  const handleCellCancel = () => {
+    setEditingCell(null);
+    setEditValue('');
+  };
 
   // Helper functions
-  const getColumnWidth = (key: string, value: any): number => {
-    if (key === 'email') return 200;
-    if (key === 'name') return 150;
-    if (typeof value === 'boolean') return 80;
-    if (typeof value === 'number') return 100;
-    if (key.includes('date')) return 120;
-    return 130;
-  };
-
-  const getInputType = (key: string, value: any): string => {
-    if (typeof value === 'number') return 'number';
-    if (typeof value === 'boolean') return 'text'; // We'll handle boolean conversion manually
-    if (key.includes('date')) return 'date';
-    if (key.includes('email')) return 'email';
-    return 'text';
-  };
-
   const formatCellValue = (value: any): string => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -252,16 +215,6 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     setEditHistory(prev => [...prev.slice(0, currentHistoryIndex + 1), historyEntry]);
     setCurrentHistoryIndex(prev => prev + 1);
   }, [currentHistoryIndex]);
-
-  const handleRowsChange = useCallback((rows: DataRow[]) => {
-    const oldData = data;
-    setData(rows);
-    onDataChange?.(rows.map(row => {
-      const { id, ...rest } = row;
-      return rest;
-    }));
-    addToHistory('edit_cells', { old: oldData, new: rows }, 'Manual cell edit');
-  }, [data, addToHistory, onDataChange]);
 
   const handleDeleteRows = useCallback(() => {
     if (selectedRows.size === 0) {
@@ -340,28 +293,24 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
       const prompt = nlPrompt.toLowerCase();
       
       if (prompt.includes('age') && (prompt.includes('realistic') || prompt.includes('increase') || prompt.includes('decrease'))) {
-        // Adjust ages
         newData = newData.map(row => ({
           ...row,
           age: row.age ? Math.max(18, Math.min(85, Number(row.age) + Math.floor(Math.random() * 10 - 5))) : row.age
         }));
         toast.success('Adjusted ages to be more realistic');
       } else if (prompt.includes('salary') && (prompt.includes('increase') || prompt.includes('boost'))) {
-        // Increase salaries
         newData = newData.map(row => ({
           ...row,
           salary: row.salary ? Math.round(Number(row.salary) * 1.1) : row.salary
         }));
         toast.success('Increased salaries by 10%');
       } else if (prompt.includes('email') && prompt.includes('fix')) {
-        // Fix email formats
         newData = newData.map(row => ({
           ...row,
           email: row.email ? row.email.toLowerCase().replace(/\s/g, '').replace(/[^a-z0-9@.-]/g, '') : row.email
         }));
         toast.success('Fixed email formats');
       } else if (prompt.includes('name') && prompt.includes('diverse')) {
-        // Make names more diverse
         const diverseNames = ['Maria Garcia', 'Wei Chen', 'Aisha Patel', 'Omar Hassan', 'Sofia Rodriguez', 'Kwame Asante', 'Elena Popov'];
         newData = newData.map((row, index) => ({
           ...row,
@@ -369,7 +318,6 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         }));
         toast.success('Made names more diverse');
       } else if (prompt.includes('department') && prompt.includes('random')) {
-        // Randomize departments
         const departments = ['Engineering', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations', 'Design'];
         newData = newData.map(row => ({
           ...row,
@@ -377,7 +325,6 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         }));
         toast.success('Randomized departments');
       } else {
-        // Generic response
         toast.info(`Applied modification: ${nlPrompt}`);
       }
       
@@ -397,7 +344,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     if (currentHistoryIndex >= 0) {
       const historyEntry = editHistory[currentHistoryIndex];
       
-      if (historyEntry.action === 'edit_cells' && historyEntry.changes.old) {
+      if (historyEntry.action === 'edit_cell' && historyEntry.changes.old) {
         setData(historyEntry.changes.old);
       } else if (historyEntry.action === 'delete_rows' && historyEntry.changes.old) {
         setData(historyEntry.changes.old);
@@ -415,7 +362,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
       setCurrentHistoryIndex(prev => prev + 1);
       const historyEntry = editHistory[currentHistoryIndex + 1];
       
-      if (historyEntry.action === 'edit_cells' && historyEntry.changes.new) {
+      if (historyEntry.action === 'edit_cell' && historyEntry.changes.new) {
         setData(historyEntry.changes.new);
       } else if (historyEntry.action === 'nl_edit' && historyEntry.changes.new) {
         setData(historyEntry.changes.new);
@@ -492,7 +439,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
           <div>
             <h2 className="text-2xl font-bold text-white mb-2">Review & Edit Generated Data</h2>
             <p className="text-gray-400">
-              {data.length} rows • {Object.keys(data[0] || {}).length - 1} columns
+              {data.length} rows • {columns.length} columns
               {selectedRows.size > 0 && ` • ${selectedRows.size} selected`}
             </p>
           </div>
@@ -610,24 +557,88 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         </div>
       </div>
 
-      {/* Data Grid */}
-      <div className="flex-1 overflow-hidden bg-gray-800">
-        <DataGrid
-          columns={columns}
-          rows={filteredData}
-          onRowsChange={handleRowsChange}
-          className="rdg-dark h-full"
-          style={{
-            '--rdg-color': '#ffffff',
-            '--rdg-background-color': '#1f2937',
-            '--rdg-header-background-color': '#374151',
-            '--rdg-row-hover-background-color': '#4b5563',
-            '--rdg-row-selected-background-color': '#6366f1',
-            '--rdg-border-color': '#4b5563',
-            '--rdg-header-font-size': '14px',
-            '--rdg-font-size': '13px'
-          } as any}
-        />
+      {/* Custom Data Table */}
+      <div className="flex-1 overflow-auto bg-gray-800">
+        <table className="w-full">
+          <thead className="bg-gray-700 sticky top-0 z-10">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300 w-12">
+                <input
+                  type="checkbox"
+                  checked={selectedRows.size === filteredData.length && filteredData.length > 0}
+                  ref={(input) => {
+                    if (input) {
+                      input.indeterminate = selectedRows.size > 0 && selectedRows.size < filteredData.length;
+                    }
+                  }}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                />
+              </th>
+              {columns.map((column) => (
+                <th key={column} className="px-4 py-3 text-left text-sm font-medium text-gray-300 min-w-[120px]">
+                  {column.charAt(0).toUpperCase() + column.slice(1).replace(/([A-Z])/g, ' $1')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((row) => (
+              <tr key={row.id} className="border-t border-gray-700/50 hover:bg-gray-700/20">
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedRows.has(row.id)}
+                    onChange={(e) => handleRowSelect(row.id, e.target.checked)}
+                    className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                  />
+                </td>
+                {columns.map((column) => (
+                  <td key={column} className="px-4 py-3">
+                    {editingCell?.rowId === row.id && editingCell?.column === column ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="flex-1 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          autoFocus
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') handleCellSave();
+                            if (e.key === 'Escape') handleCellCancel();
+                          }}
+                        />
+                        <button
+                          onClick={handleCellSave}
+                          className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
+                          title="Save"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={handleCellCancel}
+                          className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                          title="Cancel"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        className="text-sm text-gray-300 cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded flex items-center gap-2"
+                        onClick={() => handleCellEdit(row.id, column, row[column])}
+                      >
+                        <span className="flex-1">
+                          {formatCellValue(row[column])}
+                        </span>
+                        <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100" />
+                      </div>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* Footer */}
