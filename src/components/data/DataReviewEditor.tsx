@@ -3,10 +3,11 @@
  * REVOLUTIONARY DATA REVIEW & EDITING SYSTEM
  * Excel-like editing with natural language modifications
  * Real-time preview and version control
+ * Compatible with React 18
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import DataGrid, { Column, SelectColumn } from 'react-data-grid';
+import { DataGrid, Column } from 'react-data-grid';
 import 'react-data-grid/lib/styles.css';
 
 import { 
@@ -20,10 +21,7 @@ import {
   Trash2,
   Plus,
   Loader2,
-  Download,
-  RefreshCw,
-  Filter,
-  Eye
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
@@ -109,12 +107,62 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
     }));
   };
 
+  // Manual row selection handlers
+  const handleRowSelect = useCallback((rowId: string, selected: boolean) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(rowId);
+      } else {
+        newSet.delete(rowId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback((selected: boolean) => {
+    if (selected) {
+      setSelectedRows(new Set(filteredData.map(row => row.id)));
+    } else {
+      setSelectedRows(new Set());
+    }
+  }, []);
+
   // Get column definitions from data
   const columns = useMemo((): Column<DataRow>[] => {
     if (data.length === 0) return [];
     
     const sampleRow = data[0];
-    const baseColumns: Column<DataRow>[] = Object.keys(sampleRow)
+    
+    // Manual selection column
+    const selectionColumn: Column<DataRow> = {
+      key: 'select',
+      name: '',
+      width: 50,
+      minWidth: 50,
+      resizable: false,
+      sortable: false,
+      frozen: true,
+      headerRenderer: () => (
+        <input
+          type="checkbox"
+          checked={selectedRows.size === filteredData.length && filteredData.length > 0}
+          indeterminate={selectedRows.size > 0 && selectedRows.size < filteredData.length}
+          onChange={(e) => handleSelectAll(e.target.checked)}
+          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+        />
+      ),
+      formatter: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={selectedRows.has(row.id)}
+          onChange={(e) => handleRowSelect(row.id, e.target.checked)}
+          className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+        />
+      )
+    };
+
+    const dataColumns: Column<DataRow>[] = Object.keys(sampleRow)
       .filter(key => key !== 'id')
       .map(key => ({
         key,
@@ -123,7 +171,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
         sortable: true,
         editable: true,
         width: getColumnWidth(key, sampleRow[key]),
-        renderEditCell: ({ row, onRowChange, column }: any) => (
+        editor: ({ row, onRowChange, column }) => (
           <input
             type={getInputType(column.key, row[column.key])}
             value={row[column.key] || ''}
@@ -143,15 +191,15 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
             autoFocus
           />
         ),
-        renderCell: ({ row, column }: any) => (
-          <div className="px-2 py-1 text-sm">
+        formatter: ({ row, column }) => (
+          <div className="px-2 py-1 text-sm text-gray-300">
             {formatCellValue(row[column.key])}
           </div>
         )
       }));
 
-    return [SelectColumn, ...baseColumns];
-  }, [data]);
+    return [selectionColumn, ...dataColumns];
+  }, [data, selectedRows, filteredData, handleRowSelect, handleSelectAll]);
 
   // Helper functions
   const getColumnWidth = (key: string, value: any): number => {
@@ -566,8 +614,6 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
           columns={columns}
           rows={filteredData}
           onRowsChange={handleRowsChange}
-          selectedRows={selectedRows}
-          onSelectedRowsChange={setSelectedRows}
           className="rdg-dark h-full"
           style={{
             '--rdg-color': '#ffffff',
