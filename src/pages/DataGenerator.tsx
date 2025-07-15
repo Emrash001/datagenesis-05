@@ -5,8 +5,8 @@ import { useStore } from '../store/useStore';
 import { ApiService } from '../lib/api';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useModel } from '../components/ModelProvider';
-  import RealTimeActivityMonitor from '../components/RealTimeActivityMonitor';
-  import { DataReviewEditor } from '../components/data/DataReviewEditor';
+import UnifiedDataReviewEditor from '../components/unified/UnifiedDataReviewEditor';
+import UnifiedRealTimeMonitor from '../components/unified/UnifiedRealTimeMonitor';
   import { 
     Database, 
     Upload, 
@@ -938,11 +938,12 @@ const DataGenerator: React.FC = () => {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
         >
-          <RealTimeActivityMonitor 
+          <UnifiedRealTimeMonitor 
             isGenerating={isGenerating}
             maxLogs={50}
-            isCollapsible={true}
-            isDraggable={true}
+            collapsible={true}
+            position="fixed"
+            showSystemStatus={true}
           />
         </motion.div>
       )}
@@ -971,13 +972,17 @@ const DataGenerator: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
-              <DataReviewEditor 
-                initialData={generatedData.data}
-                onDataChange={(newData: any[]) => {
+              <UnifiedDataReviewEditor 
+                data={generatedData.data || []}
+                onDataUpdate={(newData: any[]) => {
                   setGeneratedData((prev: any) => ({
                     ...prev,
                     data: newData
                   }));
+                }}
+                onPromptEdit={(prompt: string) => {
+                  // Handle AI-powered editing here
+                  console.log('AI Edit prompt:', prompt);
                 }}
                 metadata={{
                   rowsGenerated: generatedData.data?.length || 0,
