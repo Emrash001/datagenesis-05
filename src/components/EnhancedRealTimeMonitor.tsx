@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -341,15 +339,6 @@ export const EnhancedRealTimeMonitor: React.FC<EnhancedRealTimeMonitorProps> = (
       case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
       case 'error': return <XCircle className="w-4 h-4 text-red-400" />;
       default: return <Info className="w-4 h-4 text-blue-400" />;
-    }
-  };
-
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case 'success': return 'text-green-400';
-      case 'warning': return 'text-yellow-400';
-      case 'error': return 'text-red-400';
-      default: return 'text-blue-400';
     }
   };
 
