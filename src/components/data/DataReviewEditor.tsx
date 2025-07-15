@@ -1,3 +1,4 @@
+
 /**
  * REVOLUTIONARY DATA REVIEW & EDITING SYSTEM
  * Excel-like editing with natural language modifications
@@ -159,7 +160,7 @@ export const DataReviewEditor: React.FC<DataReviewEditorProps> = ({
           className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
         />
       ),
-      renderHeaderCell: (props: RenderHeaderCellProps<DataRow>) => (
+      renderHeaderCell: (_props: RenderHeaderCellProps<DataRow>) => (
         <input
           type="checkbox"
           checked={selectedRows.size === filteredData.length && filteredData.length > 0}
