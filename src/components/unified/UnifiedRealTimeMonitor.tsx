@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -20,15 +19,10 @@ import {
   Pause,
   Play,
   RotateCcw,
-  X,
   Server,
-  Database,
   MessageSquare,
   Eye,
-  Clock,
-  Layers,
-  TrendingUp,
-  Filter
+  Clock
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
@@ -614,7 +608,7 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
                     <SelectContent>
                       <SelectItem value="all">All Agents</SelectItem>
                       {uniqueAgents.map(agent => (
-                        <SelectItem key={agent} value={agent}>{agent}</SelectItem>
+                        <SelectItem key={agent} value={agent || 'System'}>{agent || 'System'}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

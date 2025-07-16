@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Edit3, 
-  Save, 
   X, 
   Plus, 
   Trash2, 
@@ -21,11 +19,9 @@ import {
   CheckSquare,
   Square,
   Download,
-  Filter,
   SortAsc,
   ChevronLeft,
   ChevronRight,
-  MoreHorizontal,
   Check,
   AlertCircle
 } from 'lucide-react';
@@ -448,7 +444,6 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
 
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-muted-foreground" />
                 <Select value={filterColumn} onValueChange={setFilterColumn}>
                   <SelectTrigger className="w-32">
                     <SelectValue placeholder="All columns" />
