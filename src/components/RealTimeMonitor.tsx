@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -26,7 +25,8 @@ import {
   Loader2,
   Eye,
   Server,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -573,7 +573,7 @@ const RealTimeMonitor: React.FC<RealTimeMonitorProps> = ({
                     {isConnected ? 'Live' : 'Offline'}
                   </span>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Active Agents */}
               {activeAgents.size > 0 && (
