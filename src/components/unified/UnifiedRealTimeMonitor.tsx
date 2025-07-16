@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Activity, 
@@ -18,12 +19,23 @@ import {
   Maximize2,
   Pause,
   Play,
-  RotateCcw
+  RotateCcw,
+  X,
+  Server,
+  Database,
+  MessageSquare,
+  Eye,
+  Clock,
+  Layers,
+  TrendingUp,
+  Filter
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Input } from '../ui/input';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { ApiService } from '../../lib/api';
 import { cn } from '../../lib/utils';
@@ -31,7 +43,7 @@ import { cn } from '../../lib/utils';
 interface ActivityLog {
   id: string;
   timestamp: Date;
-  type: 'initialization' | 'domain_analysis' | 'privacy_assessment' | 'bias_detection' | 'relationship_mapping' | 'quality_planning' | 'data_generation' | 'quality_validation' | 'final_assembly' | 'completion' | 'error' | 'system';
+  type: 'initialization' | 'domain_analysis' | 'privacy_assessment' | 'bias_detection' | 'relationship_mapping' | 'quality_planning' | 'data_generation' | 'quality_validation' | 'final_assembly' | 'completion' | 'error' | 'system' | 'gemini_call' | 'agent_response';
   status: 'started' | 'in_progress' | 'completed' | 'error' | 'fallback';
   message: string;
   metadata?: Record<string, any>;
@@ -39,6 +51,7 @@ interface ActivityLog {
   progress?: number;
   agent?: string;
   level?: 'info' | 'success' | 'warning' | 'error';
+  details?: string;
 }
 
 interface SystemStatus {
@@ -60,7 +73,7 @@ interface UnifiedRealTimeMonitorProps {
 
 export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({ 
   className, 
-  maxLogs = 50,
+  maxLogs = 100,
   isGenerating = false,
   compact = false,
   collapsible = true,
@@ -71,6 +84,12 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
   const [currentProgress, setCurrentProgress] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [filterLevel, setFilterLevel] = useState<string>('all');
+  const [filterAgent, setFilterAgent] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
     backend: { healthy: false, lastCheck: null, responseTime: 0 },
     gemini: { status: 'unknown', model: 'gemini-2.0-flash-exp', quotaPreserved: false },
@@ -120,7 +139,7 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
     };
 
     checkSystemStatus();
-    const interval = setInterval(checkSystemStatus, 30000); // Check every 30 seconds
+    const interval = setInterval(checkSystemStatus, 30000);
     return () => clearInterval(interval);
   }, [isConnected]);
 
@@ -131,20 +150,19 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
     try {
       let logData: any = null;
       
-      // Handle different message formats from WebSocket
       if (lastMessage.type === 'generation_update' && lastMessage.data) {
         logData = lastMessage.data;
       } else if (lastMessage.data?.message) {
-        // Parse structured log messages
         const message = lastMessage.data.message;
         
-        // Match different log patterns from backend
+        // Enhanced parsing for different log patterns
         const patterns = {
           progress: /\[(\d+)%\]\s*([^:]+):\s*(.+)/,
-          agent: /(✅|🔄|❌|⚠️)\s*([^:]+):\s*(.+)/,
-          status: /(🤖|🧠|🔒|⚖️|🔗|🎯|📦|🎉)\s*(.+)/,
-          gemini: /Gemini\s+(\w+):\s*(.+)/i,
-          system: /System\s+(\w+):\s*(.+)/i
+          agent: /(✅|🔄|❌|⚠️|🤖|🧠|🔒|⚖️|🔗|🎯)\s*([^:]+):\s*(.+)/,
+          gemini: /Gemini\s+([\w\s]+):\s*(.+)/i,
+          system: /System\s+([\w\s]+):\s*(.+)/i,
+          error: /(Error|Failed|Exception):\s*(.+)/i,
+          completion: /(Completed|Finished|Done):\s*(.+)/i
         };
         
         for (const [type, pattern] of Object.entries(patterns)) {
@@ -155,42 +173,52 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
                 logData = {
                   progress: parseInt(match[1]),
                   step: match[2].trim(),
-                  message: match[3].trim()
+                  message: match[3].trim(),
+                  type: 'progress'
                 };
                 break;
               case 'agent':
                 logData = {
                   status: match[1],
                   agent: match[2].trim(),
-                  message: match[3].trim()
+                  message: match[3].trim(),
+                  type: 'agent'
                 };
                 break;
               case 'gemini':
                 logData = {
                   agent: 'Gemini AI',
                   status: match[1],
-                  message: match[2].trim()
+                  message: match[2].trim(),
+                  type: 'gemini'
                 };
                 break;
-              case 'system':
+              case 'error':
                 logData = {
-                  agent: 'System',
-                  status: match[1],
-                  message: match[2].trim()
+                  level: 'error',
+                  message: match[2].trim(),
+                  type: 'error'
+                };
+                break;
+              case 'completion':
+                logData = {
+                  level: 'success',
+                  message: match[2].trim(),
+                  type: 'completion'
                 };
                 break;
               default:
                 logData = {
-                  message: match[2] || match[1] || message
+                  message: match[2] || match[1] || message,
+                  type: 'system'
                 };
             }
             break;
           }
         }
         
-        // Fallback: use raw message
         if (!logData) {
-          logData = { message: message };
+          logData = { message: message, type: 'system' };
         }
       }
 
@@ -205,11 +233,13 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
             progress: logData.progress,
             step: logData.step,
             agent_data: logData.agent_data,
-            raw_message: lastMessage.data?.message
+            raw_message: lastMessage.data?.message,
+            type: logData.type
           },
           progress: logData.progress,
           agent: detectAgent(logData),
-          level: detectLevel(logData)
+          level: detectLevel(logData),
+          details: logData.details || logData.step
         };
 
         setActivities(prev => {
@@ -220,17 +250,40 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
         if (logData.progress !== undefined && logData.progress >= 0) {
           setCurrentProgress(logData.progress);
         }
+
+        // Auto-scroll to latest if enabled
+        if (autoScroll && scrollAreaRef.current) {
+          setTimeout(() => {
+            scrollAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+          }, 100);
+        }
       }
     } catch (error) {
       console.error('Failed to parse activity log:', error);
+      
+      // Add error log
+      const errorActivity: ActivityLog = {
+        id: `error_${Date.now()}`,
+        timestamp: new Date(),
+        type: 'error',
+        status: 'error',
+        message: 'Failed to parse incoming log message',
+        level: 'error',
+        agent: 'System'
+      };
+      
+      setActivities(prev => [errorActivity, ...prev.slice(0, maxLogs - 1)]);
     }
-  }, [lastMessage, maxLogs, isPaused]);
+  }, [lastMessage, maxLogs, isPaused, autoScroll]);
 
   // Helper functions for parsing logs
   const detectActivityType = (data: any): ActivityLog['type'] => {
     const message = data.message?.toLowerCase() || '';
     const step = data.step?.toLowerCase() || '';
+    const type = data.type?.toLowerCase() || '';
     
+    if (type === 'gemini' || message.includes('gemini') || step.includes('gemini')) return 'gemini_call';
+    if (type === 'agent' || message.includes('agent')) return 'agent_response';
     if (step.includes('initialization') || message.includes('initializing')) return 'initialization';
     if (step.includes('domain') || message.includes('domain')) return 'domain_analysis';
     if (step.includes('privacy') || message.includes('privacy')) return 'privacy_assessment';
@@ -252,6 +305,8 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
     if (data.status === '✅') return 'completed';
     if (data.status === '❌') return 'error';
     if (data.status === '⚠️') return 'fallback';
+    if (data.level === 'error') return 'error';
+    if (data.level === 'success') return 'completed';
     return 'started';
   };
 
@@ -272,14 +327,29 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
   };
 
   const detectLevel = (data: any): ActivityLog['level'] => {
+    if (data.level) return data.level;
     if (data.progress === -1 || data.status === '❌') return 'error';
     if (data.progress === 100 || data.status === '✅') return 'success';
     if (data.status === '⚠️') return 'warning';
     return 'info';
   };
 
+  // Filter activities
+  const filteredActivities = activities.filter(activity => {
+    const levelMatch = filterLevel === 'all' || activity.level === filterLevel;
+    const agentMatch = filterAgent === 'all' || activity.agent === filterAgent;
+    const searchMatch = searchTerm === '' || 
+      activity.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      activity.agent?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return levelMatch && agentMatch && searchMatch;
+  });
+
+  // Get unique agents for filter
+  const uniqueAgents = Array.from(new Set(activities.map(a => a.agent).filter(Boolean)));
+
   // Icon helpers
-  const getIcon = (type: ActivityLog['type']) => {
+  const getIcon = (type: ActivityLog['type'], level?: string) => {
     const iconMap = {
       'initialization': <Cog className="h-4 w-4 text-blue-400" />,
       'domain_analysis': <Brain className="h-4 w-4 text-purple-400" />,
@@ -292,19 +362,23 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
       'final_assembly': <Package className="h-4 w-4 text-blue-400" />,
       'completion': <CheckCircle className="h-4 w-4 text-green-400" />,
       'error': <AlertCircle className="h-4 w-4 text-red-400" />,
-      'system': <Activity className="h-4 w-4 text-blue-400" />
+      'system': <Activity className="h-4 w-4 text-blue-400" />,
+      'gemini_call': <Brain className="h-4 w-4 text-purple-500" />,
+      'agent_response': <MessageSquare className="h-4 w-4 text-blue-500" />
     };
+    
+    if (level === 'error') return <AlertCircle className="h-4 w-4 text-red-400" />;
+    if (level === 'success') return <CheckCircle className="h-4 w-4 text-green-400" />;
+    
     return iconMap[type] || <Activity className="h-4 w-4 text-gray-400" />;
   };
 
-  const getStatusColor = (level: string) => {
-    const colorMap: Record<string, string> = {
-      'success': 'bg-green-500/20 border-green-500/30 text-green-300',
-      'error': 'bg-red-500/20 border-red-500/30 text-red-300',
-      'warning': 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300',
-      'info': 'bg-blue-500/20 border-blue-500/30 text-blue-300'
-    };
-    return colorMap[level] || 'bg-gray-500/20 border-gray-500/30 text-gray-300';
+  const getStatusColor = (level?: string, status?: string) => {
+    if (level === 'success' || status === 'completed') return 'bg-green-500/10 border-green-500/20 text-green-300';
+    if (level === 'error' || status === 'error') return 'bg-red-500/10 border-red-500/20 text-red-300';
+    if (level === 'warning' || status === 'fallback') return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-300';
+    if (status === 'in_progress') return 'bg-blue-500/10 border-blue-500/20 text-blue-300';
+    return 'bg-gray-500/10 border-gray-500/20 text-gray-300';
   };
 
   const clearLogs = () => {
@@ -325,7 +399,9 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
       'final_assembly': '📦 Final Assembly',
       'completion': '🎉 Generation Complete',
       'error': '❌ Error Occurred',
-      'system': '⚙️ System Event'
+      'system': '⚙️ System Event',
+      'gemini_call': '🧠 Gemini AI Call',
+      'agent_response': '🤖 Agent Response'
     };
     return labels[type] || type.replace('_', ' ').toUpperCase();
   };
@@ -368,8 +444,8 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
     bottom: 16,
     right: 16,
     zIndex: 1000,
-    width: '400px',
-    maxHeight: '600px'
+    width: '500px',
+    maxHeight: '700px'
   } : {};
 
   return (
@@ -382,8 +458,8 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
         className
       )}
     >
-      <Card className="border-0 shadow-none bg-transparent">
-        <CardHeader className="pb-2">
+      <Card className="border-0 shadow-none bg-transparent h-full flex flex-col">
+        <CardHeader className="pb-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${
@@ -449,131 +525,210 @@ export const UnifiedRealTimeMonitor: React.FC<UnifiedRealTimeMonitorProps> = ({
                   transition={{ duration: 0.5 }}
                 />
               </div>
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>Progress</span>
+                <span>{currentProgress}%</span>
+              </div>
             </div>
           )}
         </CardHeader>
 
-        {/* System Status */}
         <AnimatePresence>
-          {!isCollapsed && showSystemStatus && (
-            <CardContent className="pt-0">
+          {!isCollapsed && (
+            <CardContent className="pt-0 flex-1 flex flex-col min-h-0">
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="grid grid-cols-2 gap-2 mb-4 text-xs"
+                className="flex-1 flex flex-col min-h-0"
               >
-                <div className={`flex items-center gap-2 p-2 rounded border ${
-                  systemStatus.backend.healthy ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'
-                }`}>
-                  <Brain className="w-3 h-3" />
-                  <span>Backend</span>
-                  <span className={systemStatus.backend.healthy ? 'text-green-400' : 'text-red-400'}>
-                    {systemStatus.backend.healthy ? 'OK' : 'Down'}
-                  </span>
+                {/* System Status */}
+                {showSystemStatus && (
+                  <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
+                    <div className={`flex items-center gap-2 p-2 rounded border ${
+                      systemStatus.backend.healthy ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'
+                    }`}>
+                      <Server className="w-3 h-3" />
+                      <span>Backend</span>
+                      <span className={systemStatus.backend.healthy ? 'text-green-400' : 'text-red-400'}>
+                        {systemStatus.backend.healthy ? 'OK' : 'Down'}
+                      </span>
+                    </div>
+                    
+                    <div className={`flex items-center gap-2 p-2 rounded border ${
+                      systemStatus.gemini.status === 'online' ? 'bg-purple-500/10 border-purple-500/30' : 'bg-yellow-500/10 border-yellow-500/30'
+                    }`}>
+                      <Brain className="w-3 h-3" />
+                      <span>Gemini</span>
+                      <span className={systemStatus.gemini.status === 'online' ? 'text-purple-400' : 'text-yellow-400'}>
+                        {systemStatus.gemini.status === 'online' ? 'Ready' : 'Starting'}
+                      </span>
+                    </div>
+                    
+                    <div className={`flex items-center gap-2 p-2 rounded border ${
+                      systemStatus.agents.active ? 'bg-blue-500/10 border-blue-500/30' : 'bg-gray-500/10 border-gray-500/30'
+                    }`}>
+                      <Users className="w-3 h-3" />
+                      <span>Agents</span>
+                      <span className={systemStatus.agents.active ? 'text-blue-400' : 'text-gray-400'}>
+                        {systemStatus.agents.operational}/{systemStatus.agents.total}
+                      </span>
+                    </div>
+                    
+                    <div className={`flex items-center gap-2 p-2 rounded border ${
+                      isConnected ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-500/10 border-gray-500/30'
+                    }`}>
+                      <Activity className="w-3 h-3" />
+                      <span>WebSocket</span>
+                      <span className={isConnected ? 'text-green-400' : 'text-gray-400'}>
+                        {isConnected ? 'Live' : 'Offline'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Filters */}
+                <div className="flex items-center gap-2 mb-4">
+                  <Input
+                    placeholder="Search logs..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="flex-1 h-8 text-xs"
+                  />
+                  <Select value={filterLevel} onValueChange={setFilterLevel}>
+                    <SelectTrigger className="w-20 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="error">Errors</SelectItem>
+                      <SelectItem value="warning">Warnings</SelectItem>
+                      <SelectItem value="success">Success</SelectItem>
+                      <SelectItem value="info">Info</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterAgent} onValueChange={setFilterAgent}>
+                    <SelectTrigger className="w-24 h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Agents</SelectItem>
+                      {uniqueAgents.map(agent => (
+                        <SelectItem key={agent} value={agent}>{agent}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                <div className={`flex items-center gap-2 p-2 rounded border ${
-                  systemStatus.gemini.status === 'online' ? 'bg-purple-500/10 border-purple-500/30' : 'bg-yellow-500/10 border-yellow-500/30'
-                }`}>
-                  <Zap className="w-3 h-3" />
-                  <span>Gemini</span>
-                  <span className={systemStatus.gemini.status === 'online' ? 'text-purple-400' : 'text-yellow-400'}>
-                    {systemStatus.gemini.status === 'online' ? 'Ready' : 'Starting'}
-                  </span>
-                </div>
-                
-                <div className={`flex items-center gap-2 p-2 rounded border ${
-                  systemStatus.agents.active ? 'bg-blue-500/10 border-blue-500/30' : 'bg-gray-500/10 border-gray-500/30'
-                }`}>
-                  <Users className="w-3 h-3" />
-                  <span>Agents</span>
-                  <span className={systemStatus.agents.active ? 'text-blue-400' : 'text-gray-400'}>
-                    {systemStatus.agents.operational}/{systemStatus.agents.total}
-                  </span>
-                </div>
-                
-                <div className={`flex items-center gap-2 p-2 rounded border ${
-                  isConnected ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-500/10 border-gray-500/30'
-                }`}>
-                  <Activity className="w-3 h-3" />
-                  <span>WebSocket</span>
-                  <span className={isConnected ? 'text-green-400' : 'text-gray-400'}>
-                    {isConnected ? 'Live' : 'Offline'}
-                  </span>
+
+                {/* Activity Logs */}
+                <ScrollArea className="flex-1" ref={scrollAreaRef}>
+                  <div className="space-y-2 pr-2">
+                    {filteredActivities.length === 0 ? (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">
+                          {activities.length === 0 
+                            ? 'Monitoring AI system activity...' 
+                            : 'No logs match current filters'
+                          }
+                        </p>
+                      </motion.div>
+                    ) : (
+                      <AnimatePresence mode="popLayout">
+                        {filteredActivities.slice(0, 50).map((activity, index) => (
+                          <motion.div
+                            key={activity.id}
+                            initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: 20, scale: 0.95 }}
+                            transition={{ duration: 0.2, delay: index * 0.01 }}
+                            className={`p-3 rounded-lg border ${getStatusColor(activity.level, activity.status)} hover:bg-opacity-80 transition-all cursor-pointer`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="flex-shrink-0 mt-0.5">
+                                {getIcon(activity.type, activity.level)}
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-medium">
+                                    {getStepLabel(activity.type)}
+                                  </span>
+                                  {activity.progress !== undefined && activity.progress >= 0 && (
+                                    <Badge variant="outline" className="text-xs h-4 px-1">
+                                      {activity.progress}%
+                                    </Badge>
+                                  )}
+                                  <Badge variant="outline" className="text-xs h-4 px-1">
+                                    {activity.status}
+                                  </Badge>
+                                </div>
+                                
+                                <p className="text-xs opacity-90 leading-relaxed mb-2">
+                                  {activity.message}
+                                </p>
+                                
+                                {activity.details && activity.details !== activity.message && (
+                                  <p className="text-xs opacity-70 font-mono bg-background/20 p-1 rounded">
+                                    {activity.details}
+                                  </p>
+                                )}
+                                
+                                <div className="flex items-center justify-between mt-2 text-xs opacity-60">
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3" />
+                                    <span>{activity.timestamp.toLocaleTimeString()}</span>
+                                  </div>
+                                  {activity.agent && activity.agent !== 'System' && (
+                                    <Badge variant="outline" className="text-xs h-4 px-1">
+                                      {activity.agent}
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                {/* Progress indicator for in-progress tasks */}
+                                {activity.progress !== undefined && activity.progress > 0 && activity.progress < 100 && (
+                                  <div className="mt-2">
+                                    <div className="w-full bg-background/30 rounded-full h-1">
+                                      <div 
+                                        className="bg-current h-1 rounded-full transition-all duration-300"
+                                        style={{ width: `${activity.progress}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                    )}
+                  </div>
+                </ScrollArea>
+
+                {/* Footer Stats */}
+                <div className="flex items-center justify-between pt-3 border-t text-xs text-muted-foreground">
+                  <div className="flex items-center gap-3">
+                    <span>{activities.length} total logs</span>
+                    <span>{filteredActivities.length} filtered</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setAutoScroll(!autoScroll)}
+                      className="h-6 text-xs"
+                    >
+                      <Eye className="w-3 h-3 mr-1" />
+                      Auto-scroll {autoScroll ? 'ON' : 'OFF'}
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
-
-              {/* Activity Logs */}
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-2">
-                  {activities.length === 0 ? (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-center py-8 text-muted-foreground"
-                    >
-                      <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Monitoring AI system activity...</p>
-                    </motion.div>
-                  ) : (
-                    <AnimatePresence mode="popLayout">
-                      {activities.slice(0, 20).map((activity, index) => (
-                        <motion.div
-                          key={activity.id}
-                          initial={{ opacity: 0, x: -20, scale: 0.95 }}
-                          animate={{ opacity: 1, x: 0, scale: 1 }}
-                          exit={{ opacity: 0, x: 20, scale: 0.95 }}
-                          transition={{ duration: 0.2, delay: index * 0.02 }}
-                          className={`p-2 rounded border ${getStatusColor(activity.level || 'info')}`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="flex-shrink-0 mt-0.5">
-                              {getIcon(activity.type)}
-                            </div>
-                            
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-medium">
-                                  {getStepLabel(activity.type)}
-                                </span>
-                                {activity.progress !== undefined && activity.progress >= 0 && (
-                                  <span className="text-xs opacity-75">
-                                    {activity.progress}%
-                                  </span>
-                                )}
-                              </div>
-                              
-                              <p className="text-xs opacity-90 leading-relaxed line-clamp-2">
-                                {activity.message}
-                              </p>
-                              
-                              <div className="flex items-center justify-between mt-1 text-xs opacity-60">
-                                <span>{activity.timestamp.toLocaleTimeString()}</span>
-                                {activity.agent && activity.agent !== 'System' && (
-                                  <span className="font-medium">{activity.agent}</span>
-                                )}
-                              </div>
-                              
-                              {/* Progress indicator for in-progress tasks */}
-                              {activity.progress !== undefined && activity.progress > 0 && activity.progress < 100 && (
-                                <div className="mt-1">
-                                  <div className="w-full bg-gray-700/50 rounded-full h-1">
-                                    <div 
-                                      className="bg-current h-1 rounded-full transition-all duration-300"
-                                      style={{ width: `${activity.progress}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  )}
-                </div>
-              </ScrollArea>
             </CardContent>
           )}
         </AnimatePresence>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -18,7 +19,15 @@ import {
   Eye,
   EyeOff,
   CheckSquare,
-  Square
+  Square,
+  Download,
+  Filter,
+  SortAsc,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  Check,
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -26,18 +35,11 @@ import { Textarea } from '../ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from '../ui/table';
+import { ScrollArea } from '../ui/scroll-area';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { cn } from '../../lib/utils';
 
 interface UnifiedDataReviewEditorProps {
   data: any[];
@@ -72,9 +74,10 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [showMetadata, setShowMetadata] = useState(true);
+  const [filterColumn, setFilterColumn] = useState<string>('');
 
   // Update local data when prop changes
   useEffect(() => {
@@ -83,25 +86,38 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
 
   // Filter and sort data
   const filteredAndSortedData = useMemo(() => {
-    let filtered = localData.filter(row => 
-      Object.values(row).some(value => 
+    let filtered = localData.filter(row => {
+      const searchMatch = searchTerm === '' || Object.values(row).some(value => 
         String(value).toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
+      );
+      
+      const columnMatch = filterColumn === '' || filterColumn === 'all' || 
+        (row[filterColumn] && String(row[filterColumn]).toLowerCase().includes(searchTerm.toLowerCase()));
+      
+      return searchTerm === '' ? true : (filterColumn === '' || filterColumn === 'all' ? searchMatch : columnMatch);
+    });
 
     if (sortConfig) {
       filtered.sort((a, b) => {
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
         
-        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        // Handle different data types
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        
+        const aStr = String(aVal).toLowerCase();
+        const bStr = String(bVal).toLowerCase();
+        
+        if (aStr < bStr) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aStr > bStr) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
 
     return filtered;
-  }, [localData, searchTerm, sortConfig]);
+  }, [localData, searchTerm, sortConfig, filterColumn]);
 
   // Pagination
   const paginatedData = filteredAndSortedData.slice(
@@ -113,21 +129,24 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
 
   const handleCellEdit = (rowIndex: number, colKey: string, currentValue: any) => {
     setEditingCell({ row: rowIndex, col: colKey });
-    setEditValue(String(currentValue));
+    setEditValue(String(currentValue || ''));
   };
 
   const handleCellSave = () => {
     if (editingCell) {
       const updatedData = [...localData];
-      const actualRowIndex = (currentPage - 1) * itemsPerPage + editingCell.row;
-      updatedData[actualRowIndex][editingCell.col] = editValue;
+      const globalRowIndex = filteredAndSortedData.indexOf(paginatedData[editingCell.row]);
+      const originalRowIndex = localData.indexOf(filteredAndSortedData[globalRowIndex]);
       
-      setLocalData(updatedData);
-      onDataUpdate(updatedData);
+      if (originalRowIndex !== -1) {
+        updatedData[originalRowIndex][editingCell.col] = editValue;
+        setLocalData(updatedData);
+        onDataUpdate(updatedData);
+        toast.success('Cell updated successfully');
+      }
       
       setEditingCell(null);
       setEditValue('');
-      toast.success('Cell updated successfully');
     }
   };
 
@@ -137,21 +156,26 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
   };
 
   const handleRowDelete = (displayRowIndex: number) => {
-    const actualRowIndex = (currentPage - 1) * itemsPerPage + displayRowIndex;
-    const updatedData = localData.filter((_, index) => index !== actualRowIndex);
-    setLocalData(updatedData);
-    onDataUpdate(updatedData);
-    toast.success('Row deleted successfully');
+    const globalRowIndex = filteredAndSortedData.indexOf(paginatedData[displayRowIndex]);
+    const originalRowIndex = localData.indexOf(filteredAndSortedData[globalRowIndex]);
+    
+    if (originalRowIndex !== -1) {
+      const updatedData = localData.filter((_, index) => index !== originalRowIndex);
+      setLocalData(updatedData);
+      onDataUpdate(updatedData);
+      toast.success('Row deleted successfully');
+    }
   };
 
   const handleBulkDelete = () => {
     if (selectedRows.size === 0) return;
     
-    const rowIndices = Array.from(selectedRows).map(displayIndex => 
-      (currentPage - 1) * itemsPerPage + displayIndex
-    );
+    const rowsToDelete = Array.from(selectedRows).map(displayIndex => {
+      const globalRowIndex = filteredAndSortedData.indexOf(paginatedData[displayIndex]);
+      return localData.indexOf(filteredAndSortedData[globalRowIndex]);
+    }).filter(index => index !== -1);
     
-    const updatedData = localData.filter((_, index) => !rowIndices.includes(index));
+    const updatedData = localData.filter((_, index) => !rowsToDelete.includes(index));
     setLocalData(updatedData);
     onDataUpdate(updatedData);
     setSelectedRows(new Set());
@@ -185,6 +209,9 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
     setLocalData(data);
     onDataUpdate(data);
     setSelectedRows(new Set());
+    setSearchTerm('');
+    setSortConfig(null);
+    setCurrentPage(1);
     toast.success('Data reset to original');
   };
 
@@ -224,27 +251,46 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
 
     let blob: Blob;
     let filename: string;
+    const timestamp = new Date().toISOString().split('T')[0];
 
     try {
       switch (format) {
         case 'csv':
           const csv = Papa.unparse(localData);
           blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          filename = `reviewed_data_${Date.now()}.csv`;
+          filename = `synthetic_data_${timestamp}.csv`;
           break;
         case 'json':
-          blob = new Blob([JSON.stringify(localData, null, 2)], { type: 'application/json' });
-          filename = `reviewed_data_${Date.now()}.json`;
+          const exportData = {
+            data: localData,
+            metadata: metadata,
+            exported_at: new Date().toISOString(),
+            total_rows: localData.length,
+            total_columns: Object.keys(localData[0] || {}).length
+          };
+          blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+          filename = `synthetic_data_${timestamp}.json`;
           break;
         case 'excel':
           const ws = XLSX.utils.json_to_sheet(localData);
           const wb = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(wb, ws, 'Reviewed Data');
+          XLSX.utils.book_append_sheet(wb, ws, 'Synthetic Data');
+          
+          if (metadata) {
+            const metaWs = XLSX.utils.json_to_sheet([{
+              ...metadata,
+              exported_at: new Date().toISOString(),
+              total_rows: localData.length,
+              total_columns: Object.keys(localData[0] || {}).length
+            }]);
+            XLSX.utils.book_append_sheet(wb, metaWs, 'Metadata');
+          }
+          
           const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
           blob = new Blob([excelBuffer], { 
             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
           });
-          filename = `reviewed_data_${Date.now()}.xlsx`;
+          filename = `synthetic_data_${timestamp}.xlsx`;
           break;
         default:
           return;
@@ -270,45 +316,44 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
 
   if (localData.length === 0) {
     return (
-      <Card className="bg-card border-border">
-        <CardContent className="p-8 text-center">
-          <p className="text-muted-foreground">No data available for review</p>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center h-96">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">No Data Available</h3>
+            <p className="text-muted-foreground">There's no data to review or edit at the moment.</p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   const columns = Object.keys(localData[0] || {});
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
+    <div className="flex flex-col h-full space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Review & Edit Generated Data</h2>
-          <p className="text-muted-foreground">Review, edit, and refine your synthetic data before downloading</p>
+          <h1 className="text-3xl font-bold tracking-tight">Data Review & Editor</h1>
+          <p className="text-muted-foreground mt-1">
+            Review, edit, and refine your synthetic data with powerful tools
+          </p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowMetadata(!showMetadata)}
+            className="border-border"
           >
             {showMetadata ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
             {showMetadata ? 'Hide' : 'Show'} Metrics
           </Button>
           
           {onClose && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-            >
+            <Button variant="outline" size="sm" onClick={onClose}>
               <X className="w-4 h-4 mr-2" />
               Close
             </Button>
@@ -317,109 +362,133 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
       </div>
 
       {/* Quality Metrics */}
-      {showMetadata && metadata && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-        >
-          <Card className="bg-gradient-to-r from-primary/10 to-purple-500/10 border-primary/30">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                Data Quality Metrics
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {metadata.qualityScore !== undefined && (
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-500">{metadata.qualityScore}%</div>
-                    <div className="text-sm text-muted-foreground">Quality</div>
-                  </div>
-                )}
-                {metadata.privacyScore !== undefined && (
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-500">{metadata.privacyScore}%</div>
-                    <div className="text-sm text-muted-foreground">Privacy</div>
-                  </div>
-                )}
-                {metadata.biasScore !== undefined && (
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-purple-500">{metadata.biasScore}%</div>
-                    <div className="text-sm text-muted-foreground">Bias Score</div>
-                  </div>
-                )}
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-500">{localData.length}</div>
-                  <div className="text-sm text-muted-foreground">Total Rows</div>
+      <AnimatePresence>
+        {showMetadata && metadata && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <Card className="bg-gradient-to-r from-primary/5 to-purple-500/5 border-primary/20">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  Quality Assessment
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                  {[
+                    { label: 'Quality Score', value: metadata.qualityScore, color: 'text-green-600', icon: '🎯' },
+                    { label: 'Privacy Score', value: metadata.privacyScore, color: 'text-blue-600', icon: '🔒' },
+                    { label: 'Bias Score', value: metadata.biasScore, color: 'text-purple-600', icon: '⚖️' },
+                    { label: 'Total Rows', value: localData.length, color: 'text-orange-600', icon: '📊' },
+                    { label: 'Columns', value: columns.length, color: 'text-cyan-600', icon: '📋' }
+                  ].map((metric) => (
+                    <div key={metric.label} className="text-center p-4 rounded-lg bg-background/50">
+                      <div className="text-2xl mb-1">{metric.icon}</div>
+                      <div className={`text-2xl font-bold ${metric.color}`}>
+                        {typeof metric.value === 'number' && metric.label.includes('Score') 
+                          ? `${metric.value}%` 
+                          : metric.value?.toLocaleString() || 'N/A'}
+                      </div>
+                      <div className="text-sm text-muted-foreground font-medium">{metric.label}</div>
+                    </div>
+                  ))}
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-cyan-500">{columns.length}</div>
-                  <div className="text-sm text-muted-foreground">Columns</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Controls */}
-      <div className="flex flex-col lg:flex-row gap-4 justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditMode(editMode === 'manual' ? null : 'manual')}
-            className={editMode === 'manual' ? 'bg-primary/20' : ''}
-          >
-            <Edit3 className="w-4 h-4 mr-2" />
-            Manual Edit
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setEditMode(editMode === 'prompt' ? null : 'prompt')}
-            className={editMode === 'prompt' ? 'bg-primary/20' : ''}
-          >
-            <MessageSquare className="w-4 h-4 mr-2" />
-            AI Edit
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={resetData}
-          >
-            <RotateCcw className="w-4 h-4 mr-2" />
-            Reset
-          </Button>
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4 justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={editMode === 'manual' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setEditMode(editMode === 'manual' ? null : 'manual')}
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                Manual Edit
+              </Button>
+              
+              <Button
+                variant={editMode === 'prompt' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setEditMode(editMode === 'prompt' ? null : 'prompt')}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                AI Edit
+              </Button>
+              
+              <Button variant="outline" size="sm" onClick={resetData}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
 
-          {selectedRows.size > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDelete}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete {selectedRows.size} rows
-            </Button>
-          )}
-        </div>
+              {editMode === 'manual' && (
+                <Button size="sm" onClick={handleAddRow} className="bg-green-600 hover:bg-green-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Row
+                </Button>
+              )}
 
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Input
-              placeholder="Search data..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-48 pl-8"
-            />
-            <Search className="w-4 h-4 absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+              {selectedRows.size > 0 && (
+                <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete {selectedRows.size}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted-foreground" />
+                <Select value={filterColumn} onValueChange={setFilterColumn}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="All columns" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All columns</SelectItem>
+                    {columns.map(col => (
+                      <SelectItem key={col} value={col}>{col}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder={`Search ${filterColumn || 'all columns'}...`}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-64 pl-9"
+                />
+              </div>
+              
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" onClick={() => downloadData('csv')}>
+                  <FileText className="w-4 h-4 mr-1" />
+                  CSV
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => downloadData('json')}>
+                  JSON
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => downloadData('excel')}>
+                  <FileSpreadsheet className="w-4 h-4 mr-1" />
+                  Excel
+                </Button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* AI Prompt Editor */}
       <AnimatePresence>
@@ -429,19 +498,19 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <Card className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-purple-500/30">
+            <Card className="bg-gradient-to-r from-purple-500/5 to-pink-500/5 border-purple-500/20">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Wand2 className="w-5 h-5 text-purple-400" />
+                  <Wand2 className="w-5 h-5 text-purple-500" />
                   AI-Powered Data Editing
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
-                  placeholder="Describe how you'd like to modify the data... e.g., 'Make the ages more diverse', 'Add more variety to the names', 'Increase salary ranges', 'Fix inconsistent date formats'"
+                  placeholder="Describe how you'd like to modify the data... e.g., 'Make ages more diverse', 'Add variety to names', 'Increase salary ranges', 'Fix date formats'"
                   value={promptText}
                   onChange={(e) => setPromptText(e.target.value)}
-                  className="min-h-[100px]"
+                  className="min-h-[120px] resize-none"
                 />
                 <div className="flex items-center gap-2">
                   <Button
@@ -456,10 +525,7 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
                     )}
                     Apply AI Changes
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setEditMode(null)}
-                  >
+                  <Button variant="outline" onClick={() => setEditMode(null)}>
                     Cancel
                   </Button>
                 </div>
@@ -470,208 +536,185 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
       </AnimatePresence>
 
       {/* Data Table */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center gap-4">
-            <CardTitle>
-              Data Table ({filteredAndSortedData.length} rows)
+      <Card className="flex-1 flex flex-col min-h-0">
+        <CardHeader className="flex-shrink-0 pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              Data Table
+              <Badge variant="secondary">{filteredAndSortedData.length} rows</Badge>
             </CardTitle>
             
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Rows per page:</span>
-              <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {editMode === 'manual' && (
-              <Button
-                size="sm"
-                onClick={handleAddRow}
-                className="bg-green-500 hover:bg-green-600"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Row
-              </Button>
-            )}
-            
-            <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadData('csv')}
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                CSV
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadData('json')}
-              >
-                JSON
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadData('excel')}
-              >
-                <FileSpreadsheet className="w-4 h-4 mr-2" />
-                Excel
-              </Button>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Rows per page:</span>
+                <Select value={itemsPerPage.toString()} onValueChange={(value) => {
+                  setItemsPerPage(Number(value));
+                  setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="200">200</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {editMode === 'manual' && (
-                    <TableHead className="w-12">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleSelectAll}
-                        className="p-1"
-                      >
-                        {selectedRows.size === paginatedData.length ? (
-                          <CheckSquare className="w-4 h-4" />
-                        ) : (
-                          <Square className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </TableHead>
-                  )}
-                  {columns.map((key) => (
-                    <TableHead key={key} className="min-w-32">
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleSort(key)}
-                        className="flex items-center gap-2 font-medium"
-                      >
-                        {key}
-                        {sortConfig?.key === key && (
-                          sortConfig.direction === 'asc' ? 
-                            <ArrowUp className="w-3 h-3" /> : 
-                            <ArrowDown className="w-3 h-3" />
-                        )}
-                      </Button>
-                    </TableHead>
-                  ))}
-                  {editMode === 'manual' && (
-                    <TableHead className="w-20">Actions</TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedData.map((row, rowIndex) => (
-                  <TableRow key={rowIndex}>
+        
+        <CardContent className="flex-1 p-0 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="min-w-full">
+              <table className="w-full border-collapse">
+                <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b">
+                  <tr>
                     {editMode === 'manual' && (
-                      <TableCell>
+                      <th className="w-12 p-3 text-left">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleSelectRow(rowIndex)}
-                          className="p-1"
+                          onClick={handleSelectAll}
+                          className="p-1 h-6 w-6"
                         >
-                          {selectedRows.has(rowIndex) ? (
+                          {selectedRows.size === paginatedData.length && paginatedData.length > 0 ? (
                             <CheckSquare className="w-4 h-4" />
                           ) : (
                             <Square className="w-4 h-4" />
                           )}
                         </Button>
-                      </TableCell>
+                      </th>
                     )}
                     {columns.map((key) => (
-                      <TableCell key={key}>
-                        {editMode === 'manual' && editingCell?.row === rowIndex && editingCell?.col === key ? (
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="h-8 text-sm"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCellSave();
-                                if (e.key === 'Escape') handleCellCancel();
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              onClick={handleCellSave}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Save className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={handleCellCancel}
-                              className="h-6 w-6 p-0"
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div
-                            className={`text-sm ${
-                              editMode === 'manual' ? 'cursor-pointer hover:bg-muted/50 px-2 py-1 rounded' : ''
-                            }`}
-                            onClick={() => editMode === 'manual' && handleCellEdit(rowIndex, key, row[key])}
-                          >
-                            {String(row[key]).length > 50 
-                              ? `${String(row[key]).substring(0, 50)}...` 
-                              : String(row[key]) || '-'
-                            }
-                          </div>
-                        )}
-                      </TableCell>
+                      <th key={key} className="min-w-32 p-3 text-left font-medium border-r last:border-r-0">
+                        <Button
+                          variant="ghost"
+                          onClick={() => handleSort(key)}
+                          className="flex items-center gap-2 h-auto p-0 font-medium hover:bg-transparent"
+                        >
+                          <span className="truncate">{key}</span>
+                          {sortConfig?.key === key && (
+                            <div className="flex flex-col">
+                              {sortConfig.direction === 'asc' ? (
+                                <ArrowUp className="w-3 h-3 text-primary" />
+                              ) : (
+                                <ArrowDown className="w-3 h-3 text-primary" />
+                              )}
+                            </div>
+                          )}
+                          {sortConfig?.key !== key && (
+                            <SortAsc className="w-3 h-3 text-muted-foreground/50" />
+                          )}
+                        </Button>
+                      </th>
                     ))}
                     {editMode === 'manual' && (
-                      <TableCell>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleRowDelete(rowIndex)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </TableCell>
+                      <th className="w-20 p-3 text-left font-medium">Actions</th>
                     )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedData.map((row, rowIndex) => (
+                    <tr key={rowIndex} className="border-b hover:bg-muted/50 transition-colors">
+                      {editMode === 'manual' && (
+                        <td className="p-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSelectRow(rowIndex)}
+                            className="p-1 h-6 w-6"
+                          >
+                            {selectedRows.has(rowIndex) ? (
+                              <CheckSquare className="w-4 h-4 text-primary" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </td>
+                      )}
+                      {columns.map((key) => (
+                        <td key={key} className="p-3 border-r last:border-r-0">
+                          {editMode === 'manual' && editingCell?.row === rowIndex && editingCell?.col === key ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="h-8 text-sm"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleCellSave();
+                                  if (e.key === 'Escape') handleCellCancel();
+                                }}
+                              />
+                              <Button size="sm" onClick={handleCellSave} className="h-6 w-6 p-0">
+                                <Check className="w-3 h-3" />
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={handleCellCancel} className="h-6 w-6 p-0">
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div
+                              className={cn(
+                                "text-sm py-1 px-2 rounded min-h-6 flex items-center",
+                                editMode === 'manual' && "cursor-pointer hover:bg-muted/70 transition-colors"
+                              )}
+                              onClick={() => editMode === 'manual' && handleCellEdit(rowIndex, key, row[key])}
+                            >
+                              <span className="truncate max-w-48" title={String(row[key])}>
+                                {String(row[key]) || '-'}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                      ))}
+                      {editMode === 'manual' && (
+                        <td className="p-3">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRowDelete(rowIndex)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ScrollArea>
           
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4">
+            <div className="flex items-center justify-between p-4 border-t bg-background">
               <p className="text-sm text-muted-foreground">
                 Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedData.length)} of {filteredAndSortedData.length} entries
+                {searchTerm && ` (filtered from ${localData.length} total)`}
               </p>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  First
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                 >
-                  Previous
+                  <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <span className="text-sm">
+                <span className="text-sm px-2">
                   Page {currentPage} of {totalPages}
                 </span>
                 <Button
@@ -680,7 +723,15 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
                   onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                   disabled={currentPage === totalPages}
                 >
-                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Last
                 </Button>
               </div>
             </div>
@@ -688,21 +739,29 @@ const UnifiedDataReviewEditor: React.FC<UnifiedDataReviewEditorProps> = ({
         </CardContent>
       </Card>
 
-      {/* Summary */}
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <Badge variant="outline">
-          {localData.length} rows
-        </Badge>
-        <Badge variant="outline">
-          {columns.length} columns
-        </Badge>
-        {editMode && (
-          <Badge variant="outline">
-            Edit mode active
-          </Badge>
-        )}
-      </div>
-    </motion.div>
+      {/* Summary Stats */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <Badge variant="outline">{localData.length} total rows</Badge>
+              <Badge variant="outline">{columns.length} columns</Badge>
+              {searchTerm && (
+                <Badge variant="outline">{filteredAndSortedData.length} filtered</Badge>
+              )}
+              {editMode && <Badge variant="default">Edit mode active</Badge>}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => downloadData('csv')}>
+                <Download className="w-4 h-4 mr-2" />
+                Export Data
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 
